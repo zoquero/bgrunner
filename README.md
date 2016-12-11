@@ -1,6 +1,6 @@
 # Summary
 
-Program written in C to launch background processes
+Tool written in C to launch background processes
 
 Angel Galindo ( zoquero@gmail.com ), december of 2016
 
@@ -30,5 +30,5 @@ None
 It's source can be found at GitHub: [https://github.com/zoquero/bgrunner/](https://github.com/zoquero/bgrunner/).
 
 I hope you'll find it useful!
-/Ángel
 
+/Ángel
