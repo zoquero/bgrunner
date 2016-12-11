@@ -1,5 +1,5 @@
 /*
- * Background runner
+ * Background jobs runner
  * 
  * Sources: https://github.com/zoquero/bgrunner/
  * 
@@ -14,8 +14,9 @@
 #include <errno.h>        // errno
 #include <stdint.h>       // intmax_t
 #include <string.h>       // intmax_t
-
 #include <limits.h>       // LONG_MAX, ...
+
+#include "bgrunner.h"
 
 void usage() {
   printf("Background runner\n");
@@ -39,91 +40,8 @@ unsigned long parseUL(char *str, char *valNameForErrors) {
   return r;
 }
 
-/*******
-void parseParams(char *params, enum btype thisType, int verbose, unsigned long *times, unsigned long *sizeInBytes, unsigned int *nThreads, char *folderName, char *targetFileName, char *url, char *httpRefFileBasename, unsigned long *timeoutInMS, char *dest, double warn, double crit) {
-  if(thisType == CPU) {
-    if(strlen(params) > 19) {
-      fprintf(stderr, "Params must be in \"num,num\" format\n");
-      usage();
-    }
-    if(sscanf(params, "%lu,%u", times, nThreads) != 2) {
-      *nThreads = 1;
-      if(sscanf(params, "%lu", times) != 1) {
-        fprintf(stderr, "Params must be in \"num,num\" format\n");
-        usage();
-      }
-    }
-    if(verbose)
-      printf("type=cpu, times=%lu, nThreads=%u, warnLevel=%f, critLevel=%f, verbose=%d\n", *times, *nThreads, warn, crit, verbose);
-  }
-  else if(thisType == MEM) {
-    if(sscanf(params, "%lu,%lu", times, sizeInBytes) != 2) {
-      fprintf(stderr, "Params must be in \"num,num\" format\n");
-      usage();
-    }
-    if(verbose)
-      printf("type=mem, times=%lu, sizeInBytes=%lu, warnLevel=%f, critLevel=%f, verbose=%d\n", *times, *sizeInBytes, warn, crit, verbose);
-  }
-  else if(thisType == DISK_W) {
-    if(sscanf(params, "%lu,%lu,%u,%s", times, sizeInBytes, nThreads, folderName) != 4) {
-      *nThreads = 1;
-      if(sscanf(params, "%lu,%lu,%s", times, sizeInBytes, folderName) != 3) {
-        fprintf(stderr, "Params must be in \"num,num,(num,)path\" format\n");
-        usage();
-      }
-    }
-    if(verbose)
-      printf("type=disk_w, times=%lu, sizeInBytes=%lu, nThreads=%d, folderName=%s, warnLevel=%f, critLevel=%f, verbose=%d\n", *times, *sizeInBytes, *nThreads, folderName, warn, crit, verbose);
-  }
-  else if(thisType == DISK_R_SEQ) {
-    *nThreads = 1;
-    if(sscanf(params, "%lu,%lu,%s", times, sizeInBytes, targetFileName) != 3) {
-      fprintf(stderr, "Params must be in \"num,num,path\" format\n");
-      usage();
-    }
-    if(verbose) {
-      printf("type=disk_r_seq, times=%lu, sizeInBytes=%lu, targetFileName=%s verbose=%d\n", *times, *sizeInBytes, targetFileName, verbose);
-    }
-  }
-  else if(thisType == DISK_R_RAN) {
-    if(sscanf(params, "%lu,%lu,%u,%s", times, sizeInBytes, nThreads, targetFileName) != 4) {
-      *nThreads = 1;
-      if(sscanf(params, "%lu,%lu,%s", times, sizeInBytes, targetFileName) != 3) {
-        fprintf(stderr, "Params must be in \"num,num,(num),path\" format\n");
-        usage();
-      }
-    }
-    if(verbose) {
-      printf("type=disk_r_ran, times=%lu, sizeInBytes=%lu, nThreads=%u, targetFileName=%s verbose=%d\n", *times, *sizeInBytes, *nThreads, targetFileName, verbose);
-    }
-  }
-  else if(thisType == HTTP_GET) {
-    if(sscanf(params, "%[^,],%s", httpRefFileBasename, url) != 2) {
-      fprintf(stderr, "Params must be in \"refName,url\" format\n");
-      usage();
-    }
-    if(verbose)
-      printf("type=http_get, httpRefFileBasename=%s, url=%s, verbose=%d\n", httpRefFileBasename, url, verbose);
-  }
-// ifdef OPING_ENABLED
-  else if(thisType == PING) {
-    if(sscanf(params, "%lu,%lu,%s", times, sizeInBytes, dest) != 3) {
-      fprintf(stderr, "Params must be in \"times,sizeInBytes,dest\" format\n");
-      usage();
-    }
-    if(verbose)
-      printf("type=ping, sizeInBytes=%lu, times=%lu, dest=%s, verbose=%d\n", *sizeInBytes, *times, dest, verbose);
-  }
-// endif // OPING_ENABLED
-  else {
-    fprintf(stderr, "Unknown o missing type\n");
-    usage();
-  }
-}
-**********/
 
-
-void getOpts(int argc, char **argv, int *verbose, char *fileName) {
+void getOpts(int argc, char **argv, int *verbose, char *filename) {
   int c;
   extern char *optarg;
   extern int optind, opterr, optopt;
@@ -146,7 +64,7 @@ void getOpts(int argc, char **argv, int *verbose, char *fileName) {
         *verbose = 1;
         break;
       case 'f':
-        if(sscanf(optarg, "%s", fileName) != 1) {
+        if(sscanf(optarg, "%s", filename) != 1) {
           fprintf (stderr, "Option -%c requires an argument\n", c);
           usage();
         }
@@ -167,10 +85,6 @@ void getOpts(int argc, char **argv, int *verbose, char *fileName) {
   }
 }
 
-void launchJobs(char *fileName, int verbose) {
-  printf("Launching jobs described on %s, verbose=%d\n", fileName, verbose);
-}
-
 /**
   * Main.
   *
@@ -181,9 +95,9 @@ void launchJobs(char *fileName, int verbose) {
   */
 int main (int argc, char *argv[]) {
   int  verbose = 0;
-  char fileName[PATH_MAX];
+  char filename[PATH_MAX];
 
-  getOpts(argc, argv, &verbose, fileName);
-  launchJobs(fileName, verbose);
+  getOpts(argc, argv, &verbose, filename);
+  launchJobs(filename, verbose);
   exit(0);
 }
