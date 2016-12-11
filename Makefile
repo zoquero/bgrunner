@@ -11,7 +11,7 @@ EXECUTABLE=bgrunner
 all: $(EXECUTABLE)
 
 $(EXECUTABLE): bgrunner.o
-	$(CC) -o $(EXECUTABLE) bgrunner.c $(LDFLAGS)
+	$(CC) -o $(EXECUTABLE) bgrunner.c bgrunnerfuncs.c $(LDFLAGS)
 
 clean:
 	rm *.o $(EXECUTABLE)
