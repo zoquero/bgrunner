@@ -10,7 +10,14 @@
 #include <stdio.h>        // printf, fgetc
 #include <stdlib.h>       // exit
 #include <regex.h>
-#include <string.h>
+#include <string.h>       // strlen
+
+#include <sys/types.h>    // pid_t
+#include <unistd.h>       // pid_t
+#include <sys/wait.h>     // waitpid
+
+#include <unistd.h>       // usleep
+
 
 #include "bgrunner.h"
 
@@ -40,8 +47,8 @@ unsigned int countLines(char *filename) {
   return nol;
 }
 
-void job2stdout(bgjob *b) {
-  printf("BackGround job: id=%u, alias=%s, startAfterSeconds=%u, maxDurationSeconds=%u, command=%s\n", b->id, b->alias, b->startAfterSeconds, b->maxDurationSeconds, b->command);
+void printJob(bgjob *b) {
+  printf("BackGround job: id=%u, alias=%s, startAfterSeconds=%u, maxDurationSeconds=%u, command=%s, pid=%d, state=%d\n", b->id, b->alias, b->startAfterSeconds, b->maxDurationSeconds, b->command, b->pid, b->state);
 }
 
 unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
@@ -129,6 +136,7 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
       b->startAfterSeconds  = startAfterSeconds;
       b->maxDurationSeconds = maxDurationSeconds;
       strcpy(b->command, command);
+      b->state = UNSTARTED;
 //    if(verbose) printf("struct assigned : id=%u, alias=%s, startAfterSeconds=%u, maxDurationSeconds=%u, command=%s\n", b->id, b->alias, b->startAfterSeconds, b->maxDurationSeconds, b->command);
       id++;
     }
@@ -140,24 +148,127 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
   return id;
 }
 
-void checkJob(bgjob* job) {
-  printf("checkJob \n");
+
+/**
+  * Executable arguments, first component must be the path of the executable.
+  */
+char **getExecutableArgs(bgjob* job) {
+  char **args;
+  // TO_DO PENDING add args to the end of arg array.
+  args = (char **) malloc(sizeof(char *) * 2);
+  args[0] = job->command;
+  args[1] = '\0';
+  return args;
 }
 
-void launchJob(bgjob* job) {
-  printf("Launching this job:\n\t");
-  job2stdout(job);
+void launchJob(bgjob* job, char *envp[], int verbose) {
+  char **args;
+  if(verbose) printf("Launching this job:\n");
+  if(verbose) printJob(job);
+
+  pid_t pid;
+  pid = fork();
+
+  if (pid == -1) {
+    /* error */
+    fprintf(stderr, "Error forking the process\n");
+    exit(1);
+  }
+  else if (pid == 0) {
+    /* child */
+    args = getExecutableArgs(job);
+    execve(args[0], args, envp);
+    /* execve() just returns on error */
+    fprintf(stderr, "Error calling execve\n");
+    exit(1);
+
+  }
+  else {
+    /* parent */
+    job->pid   = pid;
+    job->state = STARTED;
+//    pid_t w;
+//    int status;
+//    w = waitpid(pid, &status, WUNTRACED | WCONTINUED);
+//    if (w == -1) {
+//      fprintf(stderr, "Error en waitpid\n");
+//      exit(EXIT_FAILURE);
+//    }
+//    printf("padre: hijo finalizado\n");
+  }
+
 }
 
-void launchJobs(char *filename, int verbose) {
+void launchJobs(char *filename, char *envp[], int verbose) {
   unsigned int numJobs;
   bgjob* jobs;
   if(verbose) printf("Launching jobs described on %s, verbose=%d\n", filename, verbose);
   numJobs = loadJobs(filename, &jobs, verbose);
   if(verbose) printf("Loaded %u jobs\n", numJobs);
+
   for(int i = 0; i < numJobs; i++) {
-    launchJob(jobs+i);
+    launchJob(jobs+i, envp, verbose);
+    if(verbose) printf("Job creat: ");
+    if(verbose) printJob(jobs+i);
   }
+
+  waitForJobs(jobs, numJobs, verbose);
   free(jobs);
+}
+
+void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
+  printf("waitForJobs\n");
+  int finishedJobs;
+  pid_t w;
+  int status;
+  unsigned int sleepTime = 1000000; // 10ms
+
+printf("Bucle repassant els processos\n");
+  for(;;) {
+    finishedJobs = 0;
+    for(int i = 0; i < numJobs; i++) {
+
+//  $r = waitpid($pid, WNOHANG | WUNTRACED);
+//  print "pid=$pid, r=$r\n";
+//  if($r == 0) {
+//    print "Process $pid still running\n";
+//  }
+//  elsif($r == $pid) {
+//    print "Process $pid just finished\n";
+//  }
+//  elsif($r == -1) {
+//    print "Process $pid not running\n";
+//  }
+
+      if(verbose) printf("Checking the process #%d:", i);
+      if(verbose) printJob(&jobs[i]);
+
+      if(jobs[i].state == STARTED) {
+        w = waitpid(jobs[i].pid, &status, WNOHANG);
+        if(w == jobs[i].pid) {
+          jobs[i].state = FINISHED;
+          finishedJobs++;
+        }
+        else if(w == -1) {
+          fprintf (stderr, "Bug: job #%u has already finished\n", jobs[i].id);
+          exit(1);
+        }
+        else if(w != 0) {  // 0 is for already running child
+          fprintf (stderr, "Unknown state for job #%u: %d\n", jobs[i].id, jobs[i].state);
+          exit(1);
+        }
+      }
+      else if(jobs[i].state == FINISHED) {
+          finishedJobs++;
+      }
+    }
+    if(finishedJobs == numJobs) {
+      if(verbose) printf("All jobs finished\n");
+      return;
+    }
+
+    if(verbose) printf("Sleep %d us, %d finishedJobs\n", sleepTime, finishedJobs);
+    usleep(sleepTime);
+  }
 }
 

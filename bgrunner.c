@@ -93,11 +93,12 @@ void getOpts(int argc, char **argv, int *verbose, char *filename) {
   * http://blog.centreon.com/good-practices-how-to-develop-monitoring-plugin-nagios/
   *
   */
-int main (int argc, char *argv[]) {
+int main (int argc, char *argv[], char *envp[]) {
   int  verbose = 0;
   char filename[PATH_MAX];
 
   getOpts(argc, argv, &verbose, filename);
-  launchJobs(filename, verbose);
+  launchJobs(filename, envp, verbose);
+
   exit(0);
 }

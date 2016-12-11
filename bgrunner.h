@@ -8,10 +8,12 @@
 #ifndef BGRUNNER_H
 #define BGRUNNER_H
 
+#include <sys/types.h>    // pid_t
+#include <unistd.h>       // pid_t
+
 #define MAX_JOBS 1024
 #define MAX_ALIAS_LEN   50   // Max length of the alias
 #define MAX_COMMAND_LEN 1024 // Max length of the command
-
 
 enum bgjstate {UNSTARTED, STARTED, KILLED, FINISHED}; 
 
@@ -22,23 +24,27 @@ typedef struct {
   unsigned int  startAfterSeconds;
   unsigned int  maxDurationSeconds;
   char          command[MAX_COMMAND_LEN];
+  pid_t         pid;
   enum bgjstate state;
 } bgjob;
 
+/* Funcs */
 
-// Funcs
-
-void job2stdout(bgjob *);
+void printJob(bgjob *);
 
 unsigned int countLines(char *);
 
 unsigned int loadJobs(char *, bgjob**, int);
 
-void checkJob(bgjob*);
+char *getExecutablePath(bgjob*);
 
-void launchJob(bgjob*);
+char **getExecutableArgs(bgjob*);
 
-void launchJobs(char *, int);
+void launchJob(bgjob*, char **, int verbose);
+
+void launchJobs(char *, char *envp[], int);
+
+void waitForJobs(bgjob *, unsigned int, int);
 
 #endif // BGRUNNER_H
 
