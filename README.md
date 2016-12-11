@@ -6,17 +6,21 @@ Angel Galindo ( zoquero@gmail.com ), december of 2016
 
 # Features
 
-It allows you to launch multiple processes in background and wait for it's completion.
+It allows you to launch multiple processes in background, keep track of them and wait for it's completion. You can set an offset of time before starting each job and you can appply a timeout for each.
 
 # Motivation
 
-cron and at allow you to run background processes but you have to *ps* on a loop to realize when they have finished.
+Basic \*NIX tools are too much basic:
+
+* With ampersand (`&`) you can just launch one process and you have manage it by hand (`ps` and `kill` on a loop).
+* `cron` and `at` allow you to run multiple background processes but you still have to manage them manually.
 
 # Build and install
 
 ## Quick guide
 
 How to build:
+* (`make clean`)
 * `make`
 
 How to install:
