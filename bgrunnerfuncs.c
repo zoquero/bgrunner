@@ -11,11 +11,10 @@
 #include <stdlib.h>       // exit
 #include <regex.h>
 #include <string.h>       // strlen
-
 #include <sys/types.h>    // pid_t
 #include <unistd.h>       // pid_t
 #include <sys/wait.h>     // waitpid
-
+#include <pthread.h>      // pthread_create ...
 #include <unistd.h>       // usleep
 
 
@@ -161,10 +160,34 @@ char **getExecutableArgs(bgjob* job) {
   return args;
 }
 
+void *execStartupRouting (void *arg) {
+  exec_args *args = (exec_args *) arg;
+printf("faig execve de programa %s des del pid %d\n", (args->args)[0], getpid());
+  execve((args->args)[0], args->args, args->envp);
+
+
+estic fent:
+  fork => pthread_create => exec
+i potser s'hagi de fer:
+  pthread_create => fork => exec
+
+  /* execve() just returns on error */
+  fprintf(stderr, "Error calling execve from the thread\n");
+  exit(1);
+}
+
+void deferredExec(exec_args execArgs) {
+  pthread_t thread;
+  if(pthread_create(&thread, NULL, execStartupRouting, (void *) &execArgs) ) {
+    fprintf(stderr, "Can't create the thread\n");
+    exit(1);
+  }
+}
+
+
 void launchJob(bgjob* job, char *envp[], int verbose) {
   char **args;
-  if(verbose) printf("Launching this job:\n");
-  if(verbose) printJob(job);
+  if(verbose) { printf("Launching this job:\n"); printJob(job); }
 
   pid_t pid;
   pid = fork();
@@ -177,44 +200,36 @@ void launchJob(bgjob* job, char *envp[], int verbose) {
   else if (pid == 0) {
     /* child */
     args = getExecutableArgs(job);
-    execve(args[0], args, envp);
-    /* execve() just returns on error */
-    fprintf(stderr, "Error calling execve\n");
-    exit(1);
+//  execve(args[0], args, envp);
 
+    exec_args execArgs = {args, envp, verbose};
+    deferredExec(execArgs);
   }
   else {
     /* parent */
     job->pid   = pid;
     job->state = STARTED;
-//    pid_t w;
-//    int status;
-//    w = waitpid(pid, &status, WUNTRACED | WCONTINUED);
-//    if (w == -1) {
-//      fprintf(stderr, "Error en waitpid\n");
-//      exit(EXIT_FAILURE);
-//    }
-//    printf("padre: hijo finalizado\n");
   }
 
 }
 
+
 void launchJobs(char *filename, char *envp[], int verbose) {
   unsigned int numJobs;
   bgjob* jobs;
-  if(verbose) printf("Launching jobs described on %s, verbose=%d\n", filename, verbose);
+  if(verbose) printf("Launching jobs described on %s\n", filename);
   numJobs = loadJobs(filename, &jobs, verbose);
   if(verbose) printf("Loaded %u jobs\n", numJobs);
 
   for(int i = 0; i < numJobs; i++) {
     launchJob(jobs+i, envp, verbose);
-    if(verbose) printf("Job creat: ");
-    if(verbose) printJob(jobs+i);
+    if(verbose) { printf("Created job: "); printJob(jobs+i); }
   }
 
   waitForJobs(jobs, numJobs, verbose);
   free(jobs);
 }
+
 
 void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
   printf("waitForJobs\n");
@@ -250,7 +265,7 @@ printf("Bucle repassant els processos\n");
           finishedJobs++;
         }
         else if(w == -1) {
-          fprintf (stderr, "Bug: job #%u has already finished\n", jobs[i].id);
+          fprintf (stderr, "Bug: job #%u and pid %d has already finished\n", jobs[i].id, jobs[i].pid);
           exit(1);
         }
         else if(w != 0) {  // 0 is for already running child

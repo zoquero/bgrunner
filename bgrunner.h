@@ -28,6 +28,12 @@ typedef struct {
   enum bgjstate state;
 } bgjob;
 
+typedef struct {
+  char **args;
+  char **envp;
+  int verbose;
+} exec_args;
+
 /* Funcs */
 
 void printJob(bgjob *);
@@ -39,6 +45,8 @@ unsigned int loadJobs(char *, bgjob**, int);
 char *getExecutablePath(bgjob*);
 
 char **getExecutableArgs(bgjob*);
+
+void deferredExec(exec_args);
 
 void launchJob(bgjob*, char **, int verbose);
 
