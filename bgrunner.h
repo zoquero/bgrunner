@@ -29,9 +29,10 @@ typedef struct {
 } bgjob;
 
 typedef struct {
-  char **args;
-  char **envp;
-  int verbose;
+  bgjob *job;
+  char  **args;
+  char  **envp;
+  int  verbose;
 } exec_args;
 
 /* Funcs */
@@ -48,7 +49,7 @@ char **getExecutableArgs(bgjob*);
 
 void deferredExec(exec_args);
 
-void launchJob(bgjob*, char **, int verbose);
+void launchJob(pthread_t*, exec_args*);
 
 void launchJobs(char *, char *envp[], int);
 

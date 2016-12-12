@@ -160,34 +160,11 @@ char **getExecutableArgs(bgjob* job) {
   return args;
 }
 
-void *execStartupRouting (void *arg) {
+void *execStartupRoutine (void *arg) {
   exec_args *args = (exec_args *) arg;
 printf("faig execve de programa %s des del pid %d\n", (args->args)[0], getpid());
-  execve((args->args)[0], args->args, args->envp);
 
-
-estic fent:
-  fork => pthread_create => exec
-i potser s'hagi de fer:
-  pthread_create => fork => exec
-
-  /* execve() just returns on error */
-  fprintf(stderr, "Error calling execve from the thread\n");
-  exit(1);
-}
-
-void deferredExec(exec_args execArgs) {
-  pthread_t thread;
-  if(pthread_create(&thread, NULL, execStartupRouting, (void *) &execArgs) ) {
-    fprintf(stderr, "Can't create the thread\n");
-    exit(1);
-  }
-}
-
-
-void launchJob(bgjob* job, char *envp[], int verbose) {
-  char **args;
-  if(verbose) { printf("Launching this job:\n"); printJob(job); }
+  if(args->verbose) { printf("Launching this job:\n"); printJob(args->job); }
 
   pid_t pid;
   pid = fork();
@@ -199,18 +176,29 @@ void launchJob(bgjob* job, char *envp[], int verbose) {
   }
   else if (pid == 0) {
     /* child */
-    args = getExecutableArgs(job);
-//  execve(args[0], args, envp);
+printf("Thread execStartupRoutine : %s\n", args->args[0]);
+    execve(args->args[0], args->args, args->envp);
 
-    exec_args execArgs = {args, envp, verbose};
-    deferredExec(execArgs);
+    /* execve() just returns on error */
+    fprintf(stderr, "Error calling execve from the thread\n");
+    exit(1);
+
+//  exec_args execArgs = {args, envp, verbose};
+//  deferredExec(execArgs);
   }
   else {
     /* parent */
-    job->pid   = pid;
-    job->state = STARTED;
+    args->job->pid   = pid;
+    args->job->state = STARTED;
   }
+}
 
+
+void launchJob(pthread_t *thread, exec_args *execArgs) {
+  if(pthread_create(thread, NULL, execStartupRoutine, (void *) execArgs) ) {
+    fprintf(stderr, "Can't create the thread\n");
+    exit(1);
+  }
 }
 
 
@@ -221,8 +209,12 @@ void launchJobs(char *filename, char *envp[], int verbose) {
   numJobs = loadJobs(filename, &jobs, verbose);
   if(verbose) printf("Loaded %u jobs\n", numJobs);
 
+  pthread_t threads[numJobs];
   for(int i = 0; i < numJobs; i++) {
-    launchJob(jobs+i, envp, verbose);
+printf("launchJobs: executable:  %s\n", (*((bgjob *)(jobs+i))).command);
+    char **args = getExecutableArgs(jobs+i);
+    exec_args execArgs = {jobs+i, args, envp, verbose};
+    launchJob(threads+i, &execArgs);
     if(verbose) { printf("Created job: "); printJob(jobs+i); }
   }
 
