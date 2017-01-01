@@ -20,6 +20,9 @@
 
 #include "bgrunner.h"
 
+// /* global lock */
+// pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 
 /**
   * Returns the number of lines on a *NIX text file, empty or not.
@@ -47,7 +50,7 @@ unsigned int countLines(char *filename) {
 }
 
 void printJob(bgjob *b) {
-  printf("BackGround job: id=%u, alias=%s, startAfterSeconds=%u, maxDurationSeconds=%u, command=%s, pid=%d, state=%d\n", b->id, b->alias, b->startAfterSeconds, b->maxDurationSeconds, b->command, b->pid, b->state);
+  printf("BackGround job: id=[%u], alias=[%s], startAfterSeconds=[%u], maxDurationSeconds=[%u], command=[%s], pid=[%d], state=[%d]\n", b->id, b->alias, b->startAfterSeconds, b->maxDurationSeconds, b->command, b->pid, b->state);
 }
 
 unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
@@ -77,7 +80,7 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
 
   // read length of file and alloc bgjob array
   numLines = countLines(filename);
-  if(verbose) printf("%u lines on job descriptor %s\n", numLines, filename);
+  if(verbose > 1) printf("%u lines on job descriptor %s\n", numLines, filename);
   *bgjdptr = (bgjob*) malloc(numLines * sizeof(bgjob));
 
   FILE* myFile = fopen(filename, "r");
@@ -148,74 +151,88 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
 }
 
 
-/**
-  * Executable arguments, first component must be the path of the executable.
-  */
-char **getExecutableArgs(bgjob* job) {
-  char **args;
-  // TO_DO PENDING add args to the end of arg array.
-  args = (char **) malloc(sizeof(char *) * 2);
-  args[0] = job->command;
-  args[1] = '\0';
-  return args;
-}
-
 void *execStartupRoutine (void *arg) {
   exec_args *args = (exec_args *) arg;
-printf("faig execve de programa %s des del pid %d\n", (args->args)[0], getpid());
 
-  if(args->verbose) { printf("Launching this job:\n"); printJob(args->job); }
+//  // Let's lock. Just one exec at a time
+//  // Doesn't matter if the child has also the mutex locked, it's just to execve
+//  pthread_mutex_lock(&mutex);
 
+  if(args->verbose > 1) { printf("thread: forking from pid %d to exec this job: ", getpid()); printJob(args->job); }
   pid_t pid;
   pid = fork();
 
   if (pid == -1) {
     /* error */
-    fprintf(stderr, "Error forking the process\n");
+    fprintf(stderr, "Can't fork\n");
     exit(1);
   }
   else if (pid == 0) {
     /* child */
-printf("Thread execStartupRoutine : %s\n", args->args[0]);
+    if(args->job->startAfterSeconds > 0) {
+      if(args->verbose > 1) printf("thread: child sleeping %d seconds before execve [%s]\n", args->job->startAfterSeconds, args->args[0]);
+      sleep(args->job->startAfterSeconds);
+      if(args->verbose > 1) printf("thread: child awaken after sleeping %d seconds before execve [%s]\n", args->job->startAfterSeconds, args->args[0]);
+    }
+    if(args->verbose) printf("thread: child going to execve [%s]\n", args->args[0]);
     execve(args->args[0], args->args, args->envp);
 
     /* execve() just returns on error */
     fprintf(stderr, "Error calling execve from the thread\n");
     exit(1);
-
-//  exec_args execArgs = {args, envp, verbose};
-//  deferredExec(execArgs);
   }
   else {
     /* parent */
+    if(args->verbose > 1) printf("thread: parent after execve %s\n", args->args[0]);
     args->job->pid   = pid;
     args->job->state = STARTED;
+
+//    // Let's unlock
+//    pthread_mutex_unlock(&mutex);
   }
 }
 
 
-void launchJob(pthread_t *thread, exec_args *execArgs) {
-  if(pthread_create(thread, NULL, execStartupRoutine, (void *) execArgs) ) {
-    fprintf(stderr, "Can't create the thread\n");
-    exit(1);
-  }
-}
+// void launchJob(pthread_t *thread, exec_args *execArgs) {
+// printf("launchJob: before pthread_create. Executable= %s\n", execArgs->args[0]);
+//   if(pthread_create(thread, NULL, execStartupRoutine, (void *) execArgs) ) {
+//     fprintf(stderr, "Can't create the thread\n");
+//     exit(1);
+//   }
+// }
 
 
 void launchJobs(char *filename, char *envp[], int verbose) {
   unsigned int numJobs;
   bgjob* jobs;
-  if(verbose) printf("Launching jobs described on %s\n", filename);
-  numJobs = loadJobs(filename, &jobs, verbose);
-  if(verbose) printf("Loaded %u jobs\n", numJobs);
 
   pthread_t threads[numJobs];
+  char *args[numJobs][2];
+  exec_args execArgs[numJobs];
+
+  numJobs = loadJobs(filename, &jobs, verbose);
+  if(verbose) printf("launchJobs: Launching %u jobs described on %s\n", numJobs, filename);
+
   for(int i = 0; i < numJobs; i++) {
-printf("launchJobs: executable:  %s\n", (*((bgjob *)(jobs+i))).command);
-    char **args = getExecutableArgs(jobs+i);
-    exec_args execArgs = {jobs+i, args, envp, verbose};
-    launchJob(threads+i, &execArgs);
-    if(verbose) { printf("Created job: "); printJob(jobs+i); }
+
+    args[i][0] = jobs[i].command;
+    args[i][1] = '\0';
+
+    execArgs[i].job     = jobs+i;
+    execArgs[i].args    = args[i];
+    execArgs[i].envp    = envp;
+    execArgs[i].verbose = verbose;
+
+    if(verbose > 1) printf("launchJobs: %d: Creating a thread for the executable: %s\n", i, (*((bgjob *)(jobs+i))).command);
+//  printf("launchJobs: %d: before launchJob. Executable= %s\n", i, execArgs[i].args[0]);
+//  launchJob(threads+i, &(execArgs[i]));
+
+    if(pthread_create(threads+i, NULL, execStartupRoutine, (void *) &(execArgs[i])) ) {
+      fprintf(stderr, "Can't create the thread\n");
+      exit(1);
+    }
+
+    if(verbose > 1) { printf("launchJobs: Created job: "); printJob(jobs+i); }
   }
 
   waitForJobs(jobs, numJobs, verbose);
@@ -224,13 +241,13 @@ printf("launchJobs: executable:  %s\n", (*((bgjob *)(jobs+i))).command);
 
 
 void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
-  printf("waitForJobs\n");
   int finishedJobs;
   pid_t w;
   int status;
-  unsigned int sleepTime = 1000000; // 10ms
+  unsigned int sleepTime = 10000; // 10ms
+  unsigned int z = 0;
 
-printf("Bucle repassant els processos\n");
+  if(verbose) printf("Let's wait for jobs with sleepTime = %u us:\n", sleepTime);
   for(;;) {
     finishedJobs = 0;
     for(int i = 0; i < numJobs; i++) {
@@ -247,8 +264,8 @@ printf("Bucle repassant els processos\n");
 //    print "Process $pid not running\n";
 //  }
 
-      if(verbose) printf("Checking the process #%d:", i);
-      if(verbose) printJob(&jobs[i]);
+//    if(verbose > 1) printf("Checking the process #%d from the process %d:", i, getpid());
+//    if(verbose > 1) printJob(&jobs[i]);
 
       if(jobs[i].state == STARTED) {
         w = waitpid(jobs[i].pid, &status, WNOHANG);
@@ -274,8 +291,13 @@ printf("Bucle repassant els processos\n");
       return;
     }
 
-    if(verbose) printf("Sleep %d us, %d finishedJobs\n", sleepTime, finishedJobs);
+    if(verbose > 1)
+      if(z * sleepTime >= 1000000) {
+        z = 0;
+        printf("%d finishedJobs\n", finishedJobs);
+      }
     usleep(sleepTime);
+    z++;
   }
 }
 

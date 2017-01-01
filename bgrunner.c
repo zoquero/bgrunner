@@ -46,6 +46,7 @@ void getOpts(int argc, char **argv, int *verbose, char *filename) {
   extern char *optarg;
   extern int optind, opterr, optopt;
   opterr = 0;
+  short v = 0, d = 0;
 
   if(argc == 2 && strcmp(argv[1], "-h") == 0) {
     usage();
@@ -55,13 +56,16 @@ void getOpts(int argc, char **argv, int *verbose, char *filename) {
     usage();
   }
 
-  while ((c = getopt (argc, argv, "vf:")) != -1) {
+  while ((c = getopt (argc, argv, "vdf:")) != -1) {
     switch (c) {
       case 'h':
         usage();
         break;
       case 'v':
-        *verbose = 1;
+        v = 1;
+        break;
+      case 'd':
+        d = 1;
         break;
       case 'f':
         if(sscanf(optarg, "%s", filename) != 1) {
@@ -82,6 +86,11 @@ void getOpts(int argc, char **argv, int *verbose, char *filename) {
           "Wrong command line arguments, probably a parameter without data\n");
         usage();
     }
+
+    if(d)
+      *verbose = 2;
+    else
+      *verbose = v;
   }
 }
 
@@ -94,6 +103,11 @@ void getOpts(int argc, char **argv, int *verbose, char *filename) {
   *
   */
 int main (int argc, char *argv[], char *envp[]) {
+  /* verbose will be:
+   * 0 == non-verbose
+   * 1 == verbose      (-v)
+   * 2 == more verbose (-d)
+   */
   int  verbose = 0;
   char filename[PATH_MAX];
 
