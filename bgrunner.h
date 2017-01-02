@@ -43,14 +43,6 @@ unsigned int countLines(char *);
 
 unsigned int loadJobs(char *, bgjob**, int);
 
-char *getExecutablePath(bgjob*);
-
-char **getExecutableArgs(bgjob*);
-
-void deferredExec(exec_args);
-
-void launchJob(pthread_t*, exec_args*);
-
 void launchJobs(char *, char *envp[], int);
 
 void waitForJobs(bgjob *, unsigned int, int);
