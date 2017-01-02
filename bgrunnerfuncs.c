@@ -20,8 +20,51 @@
 
 #include "bgrunner.h"
 
-// /* global lock */
-// pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
+  int finishedJobs;
+  pid_t w;
+  int status;
+  unsigned int sleepTime = 10000; // 10ms
+  unsigned int z = 0;
+
+  if(verbose) printf("Let's wait for the jobs with a sleepTime of %u us:\n", sleepTime);
+  for(;;) {
+    finishedJobs = 0;
+    for(int i = 0; i < numJobs; i++) {
+      if(jobs[i].state == STARTED) {
+        w = waitpid(jobs[i].pid, &status, WNOHANG);
+        if(w == jobs[i].pid) {
+          jobs[i].state = FINISHED;
+          finishedJobs++;
+        }
+        else if(w == -1) {
+          fprintf (stderr, "Bug: job #%u and pid %d has already finished\n", jobs[i].id, jobs[i].pid);
+          exit(1);
+        }
+        else if(w != 0) {  // 0 is for already running child
+          fprintf (stderr, "Unknown state for job #%u: %d\n", jobs[i].id, jobs[i].state);
+          exit(1);
+        }
+      }
+      else if(jobs[i].state == FINISHED) {
+          finishedJobs++;
+      }
+    }
+    if(finishedJobs == numJobs) {
+      if(verbose) printf("All jobs finished\n");
+      return;
+    }
+
+    if(verbose > 1)
+      if(z * sleepTime >= 1000000) {
+        z = 0;
+        printf("%d finished jobs\n", finishedJobs);
+      }
+    usleep(sleepTime);
+    z++;
+  }
+}
 
 
 /**
@@ -49,9 +92,16 @@ unsigned int countLines(char *filename) {
   return nol;
 }
 
-void printJob(bgjob *b) {
-  printf("BackGround job: id=[%u], alias=[%s], startAfterSeconds=[%u], maxDurationSeconds=[%u], command=[%s], pid=[%d], state=[%d]\n", b->id, b->alias, b->startAfterSeconds, b->maxDurationSeconds, b->command, b->pid, b->state);
+
+void printJobShort(bgjob *b) {
+  printf("BackGround job with alias=[%s] that after %us will run [%s] for up to %us\n", b->alias, b->startAfterSeconds, b->command, b->maxDurationSeconds);
 }
+
+
+void printJob(bgjob *b) {
+  printf("BackGround job with alias=[%s] that after %us will run [%s] for up to %us, with pid [%d] and state [%d]\n", b->alias, b->startAfterSeconds, b->command, b->maxDurationSeconds, b->pid, b->state);
+}
+
 
 unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
   char line[MAX_ALIAS_LEN+MAX_COMMAND_LEN+50];
@@ -70,6 +120,9 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
   unsigned int g = 0;
   char sourceCopy[MAX_ALIAS_LEN+MAX_COMMAND_LEN+50 + 1];
   regmatch_t groupArray[maxGroups];
+
+  if(verbose > 1)
+    printf("Using regexp [%s] when parsing the job descriptor [%s]\n", regexString, filename);
 
   // example about C regexp: http://stackoverflow.com/a/11864144/939015
   // build regex
@@ -131,7 +184,6 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
           break;
         }
       }
-//    if(verbose) printf("regex read      :        alias=%s, startAfterSeconds=%u, maxDurationSeconds=%u, command=%s\n", alias, startAfterSeconds, maxDurationSeconds, command);
       b = *bgjdptr + id;
       b->id = id;
       strcpy(b->alias, alias);
@@ -139,7 +191,6 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
       b->maxDurationSeconds = maxDurationSeconds;
       strcpy(b->command, command);
       b->state = UNSTARTED;
-//    if(verbose) printf("struct assigned : id=%u, alias=%s, startAfterSeconds=%u, maxDurationSeconds=%u, command=%s\n", b->id, b->alias, b->startAfterSeconds, b->maxDurationSeconds, b->command);
       id++;
     }
   }
@@ -154,11 +205,9 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
 void *execStartupRoutine (void *arg) {
   exec_args *args = (exec_args *) arg;
 
-//  // Let's lock. Just one exec at a time
-//  // Doesn't matter if the child has also the mutex locked, it's just to execve
-//  pthread_mutex_lock(&mutex);
-
-  if(args->verbose > 1) { printf("thread: forking from pid %d to exec this job: ", getpid()); printJob(args->job); }
+  if(args->verbose > 1) {
+    printf("  thread for job [%s]: forking from pid %d to exec the job\n", args->job->alias, getpid());
+  }
   pid_t pid;
   pid = fork();
 
@@ -170,36 +219,24 @@ void *execStartupRoutine (void *arg) {
   else if (pid == 0) {
     /* child */
     if(args->job->startAfterSeconds > 0) {
-      if(args->verbose > 1) printf("thread: child sleeping %d seconds before execve [%s]\n", args->job->startAfterSeconds, args->args[0]);
+      if(args->verbose > 1) printf("  thread for job [%s]: child process sleeps %ds\n", args->job->alias, args->job->startAfterSeconds);
       sleep(args->job->startAfterSeconds);
-      if(args->verbose > 1) printf("thread: child awaken after sleeping %d seconds before execve [%s]\n", args->job->startAfterSeconds, args->args[0]);
+      if(args->verbose > 1) printf("  thread for job [%s]: child process awakes\n", args->job->alias);
     }
-    if(args->verbose) printf("thread: child going to execve [%s]\n", args->args[0]);
+    if(args->verbose) printf("  thread for job [%s]: child process executing [%s]\n", args->job->alias, args->args[0]);
     execve(args->args[0], args->args, args->envp);
 
     /* execve() just returns on error */
-    fprintf(stderr, "Error calling execve from the thread\n");
+    fprintf(stderr, "Error calling execve from the child process\n");
     exit(1);
   }
   else {
     /* parent */
-    if(args->verbose > 1) printf("thread: parent after execve %s\n", args->args[0]);
+    if(args->verbose > 1) printf("  thread for job [%s]: parent after exec\n", args->job->alias);
     args->job->pid   = pid;
     args->job->state = STARTED;
-
-//    // Let's unlock
-//    pthread_mutex_unlock(&mutex);
   }
 }
-
-
-// void launchJob(pthread_t *thread, exec_args *execArgs) {
-// printf("launchJob: before pthread_create. Executable= %s\n", execArgs->args[0]);
-//   if(pthread_create(thread, NULL, execStartupRoutine, (void *) execArgs) ) {
-//     fprintf(stderr, "Can't create the thread\n");
-//     exit(1);
-//   }
-// }
 
 
 void launchJobs(char *filename, char *envp[], int verbose) {
@@ -211,7 +248,13 @@ void launchJobs(char *filename, char *envp[], int verbose) {
   exec_args execArgs[numJobs];
 
   numJobs = loadJobs(filename, &jobs, verbose);
-  if(verbose) printf("launchJobs: Launching %u jobs described on %s\n", numJobs, filename);
+
+  if(verbose) {
+    printf("%u jobs described on %s:\n", numJobs, filename);
+    for(int i = 0; i < numJobs; i++) {
+      printf("* "); printJobShort(jobs+i);
+    }
+  }
 
   for(int i = 0; i < numJobs; i++) {
 
@@ -223,81 +266,15 @@ void launchJobs(char *filename, char *envp[], int verbose) {
     execArgs[i].envp    = envp;
     execArgs[i].verbose = verbose;
 
-    if(verbose > 1) printf("launchJobs: %d: Creating a thread for the executable: %s\n", i, (*((bgjob *)(jobs+i))).command);
-//  printf("launchJobs: %d: before launchJob. Executable= %s\n", i, execArgs[i].args[0]);
-//  launchJob(threads+i, &(execArgs[i]));
+    if(verbose > 1) printf("Creating the launcher thread for the job [%s]\n", (*((bgjob *)(jobs+i))).alias);
 
     if(pthread_create(threads+i, NULL, execStartupRoutine, (void *) &(execArgs[i])) ) {
       fprintf(stderr, "Can't create the thread\n");
       exit(1);
     }
-
-    if(verbose > 1) { printf("launchJobs: Created job: "); printJob(jobs+i); }
   }
 
   waitForJobs(jobs, numJobs, verbose);
   free(jobs);
-}
-
-
-void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
-  int finishedJobs;
-  pid_t w;
-  int status;
-  unsigned int sleepTime = 10000; // 10ms
-  unsigned int z = 0;
-
-  if(verbose) printf("Let's wait for jobs with sleepTime = %u us:\n", sleepTime);
-  for(;;) {
-    finishedJobs = 0;
-    for(int i = 0; i < numJobs; i++) {
-
-//  $r = waitpid($pid, WNOHANG | WUNTRACED);
-//  print "pid=$pid, r=$r\n";
-//  if($r == 0) {
-//    print "Process $pid still running\n";
-//  }
-//  elsif($r == $pid) {
-//    print "Process $pid just finished\n";
-//  }
-//  elsif($r == -1) {
-//    print "Process $pid not running\n";
-//  }
-
-//    if(verbose > 1) printf("Checking the process #%d from the process %d:", i, getpid());
-//    if(verbose > 1) printJob(&jobs[i]);
-
-      if(jobs[i].state == STARTED) {
-        w = waitpid(jobs[i].pid, &status, WNOHANG);
-        if(w == jobs[i].pid) {
-          jobs[i].state = FINISHED;
-          finishedJobs++;
-        }
-        else if(w == -1) {
-          fprintf (stderr, "Bug: job #%u and pid %d has already finished\n", jobs[i].id, jobs[i].pid);
-          exit(1);
-        }
-        else if(w != 0) {  // 0 is for already running child
-          fprintf (stderr, "Unknown state for job #%u: %d\n", jobs[i].id, jobs[i].state);
-          exit(1);
-        }
-      }
-      else if(jobs[i].state == FINISHED) {
-          finishedJobs++;
-      }
-    }
-    if(finishedJobs == numJobs) {
-      if(verbose) printf("All jobs finished\n");
-      return;
-    }
-
-    if(verbose > 1)
-      if(z * sleepTime >= 1000000) {
-        z = 0;
-        printf("%d finishedJobs\n", finishedJobs);
-      }
-    usleep(sleepTime);
-    z++;
-  }
 }
 

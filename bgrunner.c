@@ -18,26 +18,12 @@
 
 #include "bgrunner.h"
 
+
 void usage() {
   printf("Background runner\n");
   printf("Usage:\n");
   printf("bgrunner (-v) -f <jobsdescriptor>\n");
   exit(1);
-}
-
-unsigned long parseUL(char *str, char *valNameForErrors) {
-  unsigned long r;
-  char *endptr;
-  r = strtol(str, &endptr, 10);
-  if((errno == ERANGE && (r == LONG_MAX || r == LONG_MIN)) || (errno != 0 && r == 0)) {
-    fprintf(stderr, "Error parsing \"%s\". Probably value too long.\n", valNameForErrors);
-    usage();
-  }
-  if(endptr == str) {
-    fprintf(stderr, "No digits found parsing \"%s\"\n", valNameForErrors);
-    usage();
-  }
-  return r;
 }
 
 
