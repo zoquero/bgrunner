@@ -11,21 +11,37 @@
 #include <stdlib.h>       // exit
 #include <regex.h>
 #include <string.h>       // strlen
-#include <sys/types.h>    // pid_t
+#include <sys/types.h>    // pid_t , kill
 #include <unistd.h>       // pid_t
 #include <sys/wait.h>     // waitpid
 #include <pthread.h>      // pthread_create ...
 #include <unistd.h>       // usleep
-
+#include <sys/time.h>     // gettimeofday
+#include <signal.h>       // kill
 
 #include "bgrunner.h"
+
+#define SLEEP_TIME 10000  // microseconds
+
+
+/*
+ * Difference between 2 points in time.
+ *
+ * @arg startup time
+ * @arg startup time
+ * @return difference in miliseconds
+ */
+double timeval_diff(struct timeval *a, struct timeval *b) {
+// printf("Difference = %f\n", 1000 * ((double)(a->tv_sec + (double)a->tv_usec/1000000) - (double)(b->tv_sec + (double)b->tv_usec/1000000)));
+  return 1000 * ((double)(a->tv_sec + (double)a->tv_usec/1000000) - (double)(b->tv_sec + (double)b->tv_usec/1000000));
+}
 
 
 void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
   int finishedJobs;
   pid_t w;
   int status;
-  unsigned int sleepTime = 10000; // 10ms
+  unsigned int sleepTime = SLEEP_TIME;
   unsigned int z = 0;
 
   if(verbose) printf("Let's wait for the jobs with a sleepTime of %u us:\n", sleepTime);
@@ -39,16 +55,25 @@ void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
           finishedJobs++;
         }
         else if(w == -1) {
-          fprintf (stderr, "Bug: job #%u and pid %d has already finished\n", jobs[i].id, jobs[i].pid);
+          fprintf (stderr, "Bug: job [%s] with pid [%d] has already finished\n", jobs[i].alias, jobs[i].pid);
           exit(1);
         }
         else if(w != 0) {  // 0 is for already running child
-          fprintf (stderr, "Unknown state for job #%u: %d\n", jobs[i].id, jobs[i].state);
+          fprintf (stderr, "Unknown state for job [%s]: %d\n", jobs[i].alias, jobs[i].state);
           exit(1);
+        }
+        else {  // already running
+          struct timeval now;
+          gettimeofday(&now, NULL);
+// if(verbose) printf("Job [%s] has maxDurationMS = %u ms\n", jobs[i].alias, jobs[i].maxDurationMS);
+          if(timeval_diff(&now, &(jobs[i].startupTime)) > jobs[i].maxDurationMS + jobs[i].startAfterMS) {
+            if(verbose) printf("Job [%s] has been running more than %u ms. Let's kill it.\n", jobs[i].alias, jobs[i].maxDurationMS);
+            kill(jobs[i].pid, SIGKILL);
+          }
         }
       }
       else if(jobs[i].state == FINISHED) {
-          finishedJobs++;
+        finishedJobs++;
       }
     }
     if(finishedJobs == numJobs) {
@@ -94,12 +119,12 @@ unsigned int countLines(char *filename) {
 
 
 void printJobShort(bgjob *b) {
-  printf("BackGround job with alias=[%s] that after %us will run [%s] for up to %us\n", b->alias, b->startAfterSeconds, b->command, b->maxDurationSeconds);
+  printf("BackGround job with alias=[%s] that after %ums will run [%s] for up to %ums\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS);
 }
 
 
 void printJob(bgjob *b) {
-  printf("BackGround job with alias=[%s] that after %us will run [%s] for up to %us, with pid [%d] and state [%d]\n", b->alias, b->startAfterSeconds, b->command, b->maxDurationSeconds, b->pid, b->state);
+  printf("BackGround job with alias=[%s] that after %ums will run [%s] for up to %ums, with pid [%d] and state [%d]\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS, b->pid, b->state);
 }
 
 
@@ -108,8 +133,8 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
   unsigned int numLines;
   unsigned int id = 0;
   char alias[MAX_ALIAS_LEN];
-  unsigned int startAfterSeconds;
-  unsigned int maxDurationSeconds;
+  unsigned int startAfterMS;
+  unsigned int maxDurationMS;
   char command[MAX_COMMAND_LEN];
   bgjob *b;
   char *regexString = "([^;]+);([^;]+);([^;]+);([^;]+)";
@@ -145,8 +170,8 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
 
     if (regexec(&regexCompiled, line, maxGroups, groupArray, 0) == 0) {
       *alias             = '\0';
-      startAfterSeconds  = 0;
-      maxDurationSeconds = 0;
+      startAfterMS  = 0;
+      maxDurationMS = 0;
       *command           = '\0';
       for (g = 0; g < maxGroups; g++) {
         if (groupArray[g].rm_so == (size_t)-1)
@@ -164,14 +189,14 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
           }
           break;
         case 2:
-          if(sscanf(sourceCopy + groupArray[g].rm_so, "%u", &startAfterSeconds) != 1) {
-            fprintf(stderr, "Can't read startAfterSeconds in line [%s] on descriptor %s\n", line, filename);
+          if(sscanf(sourceCopy + groupArray[g].rm_so, "%u", &startAfterMS) != 1) {
+            fprintf(stderr, "Can't read startAfterMS in line [%s] on descriptor %s\n", line, filename);
             exit(1);
           }
           break;
         case 3:
-          if(sscanf(sourceCopy + groupArray[g].rm_so, "%u", &maxDurationSeconds) != 1) {
-            fprintf(stderr, "Can't read maxDurationSeconds in line [%s] on descriptor %s\n", line, filename);
+          if(sscanf(sourceCopy + groupArray[g].rm_so, "%u", &maxDurationMS) != 1) {
+            fprintf(stderr, "Can't read maxDurationMS in line [%s] on descriptor %s\n", line, filename);
             exit(1);
           }
           break;
@@ -187,8 +212,8 @@ unsigned int loadJobs(char *filename, bgjob** bgjdptr, int verbose) {
       b = *bgjdptr + id;
       b->id = id;
       strcpy(b->alias, alias);
-      b->startAfterSeconds  = startAfterSeconds;
-      b->maxDurationSeconds = maxDurationSeconds;
+      b->startAfterMS  = startAfterMS;
+      b->maxDurationMS = maxDurationMS;
       strcpy(b->command, command);
       b->state = UNSTARTED;
       id++;
@@ -218,11 +243,12 @@ void *execStartupRoutine (void *arg) {
   }
   else if (pid == 0) {
     /* child */
-    if(args->job->startAfterSeconds > 0) {
-      if(args->verbose > 1) printf("  thread for job [%s]: child process sleeps %ds\n", args->job->alias, args->job->startAfterSeconds);
-      sleep(args->job->startAfterSeconds);
+    if(args->job->startAfterMS > 0) {
+      if(args->verbose > 1) printf("  thread for job [%s]: child process sleeps %dms\n", args->job->alias, args->job->startAfterMS);
+      usleep(1000 * args->job->startAfterMS);
       if(args->verbose > 1) printf("  thread for job [%s]: child process awakes\n", args->job->alias);
     }
+
     if(args->verbose) printf("  thread for job [%s]: child process executing [%s]\n", args->job->alias, args->args[0]);
     execve(args->args[0], args->args, args->envp);
 
@@ -232,9 +258,14 @@ void *execStartupRoutine (void *arg) {
   }
   else {
     /* parent */
-    if(args->verbose > 1) printf("  thread for job [%s]: parent after exec\n", args->job->alias);
-    args->job->pid   = pid;
-    args->job->state = STARTED;
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
+    args->job->pid         = pid;
+    args->job->state       = STARTED;
+    args->job->startupTime = now;
+
+//  if(args->verbose > 1) printf("  thread for job [%s]: parent after exec\n", args->job->alias);
   }
 }
 

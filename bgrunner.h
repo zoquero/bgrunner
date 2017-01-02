@@ -19,13 +19,14 @@ enum bgjstate {UNSTARTED, STARTED, KILLED, FINISHED};
 
 /** Background job structure */
 typedef struct {
-  unsigned int  id;
-  char          alias[MAX_ALIAS_LEN];
-  unsigned int  startAfterSeconds;
-  unsigned int  maxDurationSeconds;
-  char          command[MAX_COMMAND_LEN];
-  pid_t         pid;
-  enum bgjstate state;
+  unsigned int   id;
+  char           alias[MAX_ALIAS_LEN];
+  unsigned int   startAfterMS;
+  unsigned int   maxDurationMS;
+  char           command[MAX_COMMAND_LEN];
+  pid_t          pid;
+  enum bgjstate  state;
+  struct timeval startupTime;
 } bgjob;
 
 typedef struct {
