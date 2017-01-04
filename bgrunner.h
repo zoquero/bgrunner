@@ -10,10 +10,10 @@
 
 #include <sys/types.h>    // pid_t
 #include <unistd.h>       // pid_t
+#include <limits.h>       // PATH_MAX
 
 #define MAX_JOBS 1024
 #define MAX_ALIAS_LEN   50   // Max length of the alias
-#define MAX_COMMAND_LEN 1024 // Max length of the command
 
 enum bgjstate {UNSTARTED, STARTED, KILLED, FINISHED}; 
 
@@ -23,18 +23,21 @@ typedef struct {
   char           alias[MAX_ALIAS_LEN];
   unsigned int   startAfterMS;
   unsigned int   maxDurationMS;
-  char           command[MAX_COMMAND_LEN];
+  char           command[PATH_MAX];
   pid_t          pid;
   enum bgjstate  state;
   struct timeval startupTime;
+  char         **envp;
+  int            verbose;
 } bgjob;
 
+/*
 typedef struct {
   bgjob *job;
-  char  **args;
   char  **envp;
   int  verbose;
 } exec_args;
+*/
 
 /* Funcs */
 
@@ -42,7 +45,7 @@ void printJob(bgjob *);
 
 unsigned int countLines(char *);
 
-unsigned int loadJobs(char *, bgjob**, int);
+bgjob *loadJobs(char *, unsigned int*, char *envp[], int);
 
 void launchJobs(char *, char *envp[], int);
 

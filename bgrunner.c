@@ -14,7 +14,7 @@
 #include <errno.h>        // errno
 #include <stdint.h>       // intmax_t
 #include <string.h>       // intmax_t
-#include <limits.h>       // LONG_MAX, ...
+#include <limits.h>       // PATH_MAX, ...
 
 #include "bgrunner.h"
 
