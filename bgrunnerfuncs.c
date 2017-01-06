@@ -12,18 +12,22 @@
 #include <regex.h>
 #include <string.h>       // strlen
 #include <sys/types.h>    // pid_t , kill
-#include <unistd.h>       // pid_t
+#include <unistd.h>       // pid_t , usleep
 #include <sys/wait.h>     // waitpid
 #include <pthread.h>      // pthread_create ...
-#include <unistd.h>       // usleep
 #include <sys/time.h>     // gettimeofday
 #include <signal.h>       // kill
+#include <fcntl.h>        // open
 
 #include "bgrunner.h"
 
 #define SLEEP_TIME 10000            // in microseconds
 #define US_TO_SHOW_ON_DEBUG 1000000 // 1 second
-#define BUFSIZE 40960
+#define BUFSIZE 1024
+
+// pthread_mutex_t mi_mutex = PTHREAD_MUTEX_INITIALIZER;
+// pthread_mutex_lock(&mi_mutex);
+// pthread_mutex_unlock(&mi_mutex);
 
 
 /**
@@ -31,15 +35,19 @@
   * @arg s string to write
   */
 void tPrint (char *s) {
+  
   time_t     rawtime;
-  struct tm *info;
   char       buffer[80];
   struct tm  result;
-  
   time(&rawtime);
-  info=gmtime_r(&rawtime, &result); // _r for thread safe
-  strftime(buffer,80, "%Y-%m-%d %H:%M:%SZ", info);
-  printf("%s: %s\n", buffer, s);
+  if(gmtime_r(&rawtime, &result) != NULL) {    // _r for thread safeness
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%SZ", &result);
+    printf("%s: %s\n", buffer, s);
+  }
+/*
+  A problem: gmtime_r and ctime sometimes stops the program's execution
+  printf("log: %s\n", s);
+*/
 }
 
 
@@ -76,7 +84,7 @@ void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
           jobs[i].state = FINISHED;
           finishedJobs++;
           if(verbose) {
-            sprintf(MSGBUFF, "Job [%s] just finished", jobs[i].alias);
+            sprintf(MSGBUFF, "Job [%s] finished", jobs[i].alias);
             tPrint(MSGBUFF);
           }
         }
@@ -164,7 +172,8 @@ void printJobFull(bgjob *b) {
 
 
 bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose) {
-  char line[MAX_ALIAS_LEN+PATH_MAX+50];
+  unsigned int maxLineLength = MAX_ALIAS_LEN+PATH_MAX+50;
+  char line[maxLineLength];
   unsigned int numLines;
   unsigned int id = 0;
   char alias[MAX_ALIAS_LEN];
@@ -182,6 +191,7 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
   regmatch_t groupArray[maxGroups];
   char MSGBUFF[BUFSIZE];
   bgjob* jobs;
+  char scanfFormat[20];
 
   if(verbose > 1) {
     sprintf(MSGBUFF, "Using regexp [%s] when parsing the job descriptor [%s]", regexString, filename);
@@ -205,6 +215,7 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
 
   FILE* myFile = fopen(filename, "r");
 
+  sprintf(scanfFormat, "%%%ds", maxLineLength - 1);
   while(fscanf(myFile, "%s\n", line) == 1) {
     // headers, comments
     if(*line == '#')
@@ -271,45 +282,74 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
 
 
 void *execStartupRoutine (void *arg) {
+printf("DEBUG: execStartupRoutine :\n");
   char MSGBUFF[BUFSIZE];
   bgjob *job = (bgjob *) arg;
 
-  if(job->verbose > 1) {
-    sprintf(MSGBUFF, "Thread for job [%s]: forking from pid %d to exec the job", job->alias, getpid());
+  if(job->verbose) {
+    sprintf(MSGBUFF, "Thread for [%s]: forking from pid %d and thread id %lu to exec the job", job->alias, getpid(), pthread_self());
     tPrint(MSGBUFF);
   }
   pid_t pid;
   pid = fork();
 
-  if (pid == -1) {
+  if (pid < 0) {
     /* error */
     fprintf(stderr, "Can't fork\n");
     exit(1);
   }
   else if (pid == 0) {
+
     /* child */
+    if(job->verbose) {
+      sprintf(MSGBUFF, "Thread for [%s]: child process for [%s] has pid [%u]", job->alias, job->command, getpid());
+      tPrint(MSGBUFF);
+    }
     if(job->startAfterMS > 0) {
-      if(job->verbose > 1) {
-        sprintf(MSGBUFF, "Thread for job [%s]: child process sleeps %dms", job->alias, job->startAfterMS);
+      // somehow calling tPrint on child aborts the execution sometimes when it calls gmtime_r or ctime
+      if(job->verbose) {
+        sprintf(MSGBUFF, "Thread for [%s]: child process sleeps %dms", job->alias, job->startAfterMS);
         tPrint(MSGBUFF);
       }
       usleep(1000 * job->startAfterMS);
-      if(job->verbose > 1) {
-        sprintf(MSGBUFF, "Thread for job [%s]: child process awakes", job->alias);
+      if(job->verbose) {
+        sprintf(MSGBUFF, "Thread for [%s]: child process awakes", job->alias);
         tPrint(MSGBUFF);
       }
     }
 
-    //...
-    if(job->verbose > 0) {
-      sprintf(MSGBUFF, "Thread for job [%s]: child process executing [%s]", job->alias, job->command);
+    // somehow calling tPrint on child aborts the execution sometimes when it calls gmtime_r or ctime
+    if(job->verbose) {
+      sprintf(MSGBUFF, "Thread for [%s]: child process executing [%s]", job->alias, job->command);
       tPrint(MSGBUFF);
     }
-    char *myArgs[2] = { job->command, NULL };
-    execve(job->command, myArgs, job->envp);
+
+
+    char childFileOut[PATH_MAX];
+    char childFileErr[PATH_MAX];
+    sprintf(childFileOut, "/tmp/bgrunner.job.%s.stdout", job->alias);
+    sprintf(childFileErr, "/tmp/bgrunner.job.%s.stderr", job->alias);
+
+    int outFd = open(childFileOut, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    int errFd = open(childFileOut, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if(outFd < 0 || errFd < 0) {
+      fprintf(stderr, "Error opening stdout or stderr files on the child process of [%s]\n", job->alias);
+      exit(1);
+    }
+
+    if(dup2(outFd, 1) < 0 || dup2(errFd, 2) < 0) {
+      fprintf(stderr, "Error duplicating file descriptors on the child process of [%s]\n", job->alias);
+      exit(1);
+    }
+    if(close(outFd) < 0 || close(errFd) < 0) {
+      fprintf(stderr, "Error closing the old file descriptors after duplicating them on the child process of [%s]\n", job->alias);
+      exit(1);
+    }
+
+    execl(job->command, job->command, (char *) NULL);
 
     /* execve() just returns on error */
-    fprintf(stderr, "Error calling execve from the child process\n");
+    fprintf(stderr, "Error calling execve from the child process of [%s]\n", job->alias);
     exit(1);
   }
   else {
@@ -321,7 +361,7 @@ void *execStartupRoutine (void *arg) {
     job->state       = STARTED;
     job->startupTime = now;
 
-//  if(job->verbose > 1) printf("Thread for job [%s]: parent after exec\n", job->alias);
+    if(job->verbose) printf("Thread for [%s]: parent after exec\n", job->alias);
   }
 }
 
@@ -330,6 +370,7 @@ void launchJobs(char *filename, char *envp[], int verbose) {
   unsigned int numJobs;
   bgjob* jobs;
   pthread_t *threads;
+  char MSGBUFF[BUFSIZE];
 
   jobs = loadJobs(filename, &numJobs, envp, verbose);
   threads = (pthread_t *) malloc(numJobs * sizeof(pthread_t));
@@ -342,7 +383,10 @@ void launchJobs(char *filename, char *envp[], int verbose) {
   }
 
   for(int i = 0; i < numJobs; i++) {
-    if(verbose > 1) printf("Creating the launcher thread for the job [%s]\n", (*((bgjob *)(jobs+i))).alias);
+    if(verbose > 1) {
+      sprintf(MSGBUFF, "Creating the launcher thread for the job [%s]", (*((bgjob *)(jobs+i))).alias);
+      tPrint(MSGBUFF);
+    }
 
     if(pthread_create(threads+i, NULL, execStartupRoutine, (void *) &(jobs[i]))) {
       fprintf(stderr, "Can't create the thread\n");

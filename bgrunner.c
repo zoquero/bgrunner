@@ -42,6 +42,8 @@ void getOpts(int argc, char **argv, int *verbose, char *filename) {
     usage();
   }
 
+  char scanfFormat[20];
+  sprintf(scanfFormat, "%%%ds", PATH_MAX - 1);
   while ((c = getopt (argc, argv, "vdf:")) != -1) {
     switch (c) {
       case 'h':
@@ -54,7 +56,7 @@ void getOpts(int argc, char **argv, int *verbose, char *filename) {
         d = 1;
         break;
       case 'f':
-        if(sscanf(optarg, "%s", filename) != 1) {
+        if(sscanf(optarg, scanfFormat, filename) != 1) {
           fprintf (stderr, "Option -%c requires an argument\n", c);
           usage();
         }
