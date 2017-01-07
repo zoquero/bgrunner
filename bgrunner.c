@@ -18,7 +18,6 @@
 
 #include "bgrunner.h"
 
-
 void usage() {
   printf("Background runner\n");
   printf("Usage:\n");

@@ -44,4 +44,3 @@ void launchJobs(char *, char *envp[], int);
 void waitForJobs(bgjob *, unsigned int, int);
 
 #endif // BGRUNNER_H
-
