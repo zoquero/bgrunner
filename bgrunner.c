@@ -22,7 +22,7 @@
 void usage() {
   printf("Background runner\n");
   printf("Usage:\n");
-  printf("bgrunner (-v) -f <jobsdescriptor>\n");
+  printf("bgrunner (-v) (-d) -f <jobsdescriptor>\n");
   exit(1);
 }
 

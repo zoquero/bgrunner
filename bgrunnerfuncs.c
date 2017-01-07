@@ -101,7 +101,7 @@ void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
           if(jobs[i].maxDurationMS != 0) {
             struct timeval now;
             gettimeofday(&now, NULL);
-            if(timeval_diff(&now, &(jobs[i].startupTime)) > jobs[i].maxDurationMS + jobs[i].startAfterMS) {
+            if(timeval_diff(&now, &(jobs[i].startupTime)) > jobs[i].maxDurationMS /* + jobs[i].startAfterMS */ ) {
               sprintf(MSGBUFF, "Job [%s] has been running more than %u ms. Let's kill it", jobs[i].alias, jobs[i].maxDurationMS);
               tPrint(MSGBUFF);
               kill(jobs[i].pid, SIGKILL);
@@ -157,16 +157,19 @@ unsigned int countLines(char *filename) {
 
 
 void printJobShort(bgjob *b) {
-  printf("BackGround job with alias=[%s] that after %ums will run [%s] for up to %ums\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS);
+//printf("BackGround job with alias=[%s] that after %ums will run [%s] for up to %ums\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS);
+  printf("BackGround job with alias=[%s] that will run [%s] for up to %ums\n", b->alias, b->command, b->maxDurationMS);
 }
 
 
 void printJob(bgjob *b) {
-  printf("BackGround job with alias=[%s] that after %ums will run [%s] for up to %ums, with pid [%d] and state [%d]\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS, b->pid, b->state);
+//printf("BackGround job with alias=[%s] that after %ums will run [%s] for up to %ums, with pid [%d] and state [%d]\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS, b->pid, b->state);
+  printf("BackGround job with alias=[%s] that will run [%s] for up to %ums, with pid [%d] and state [%d]\n", b->alias, b->command, b->maxDurationMS, b->pid, b->state);
 }
 
 void printJobFull(bgjob *b) {
-  printf("BackGround job with id=[%d], alias=[%s], startAfterMS=[%u], maxDurationMS=[%u], command=[%s], pid=[%u], state=[%d], startupTime=[?], envp=[?], verbose=[%d]\n", b->id, b->alias, b->startAfterMS, b->maxDurationMS, b->command, b->pid, b->state, /* b->startupTime, b->envp, */ b->verbose);
+//printf("BackGround job with id=[%d], alias=[%s], startAfterMS=[%u], maxDurationMS=[%u], command=[%s], pid=[%u], state=[%d], startupTime=[?], envp=[?], verbose=[%d]\n", b->id, b->alias, b->startAfterMS, b->maxDurationMS, b->command, b->pid, b->state, /* b->startupTime, b->envp, */ b->verbose);
+  printf("BackGround job with id=[%d], alias=[%s], maxDurationMS=[%u], command=[%s], pid=[%u], state=[%d], startupTime=[?], envp=[?], verbose=[%d]\n", b->id, b->alias, b->maxDurationMS, b->command, b->pid, b->state, /* b->startupTime, b->envp, */ b->verbose);
 }
 
 
@@ -177,13 +180,15 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
   unsigned int numLines;
   unsigned int id = 0;
   char alias[MAX_ALIAS_LEN];
-  unsigned int startAfterMS;
+//unsigned int startAfterMS;
   unsigned int maxDurationMS;
   char command[PATH_MAX];
   bgjob *b;
-  char *regexString = "([^;]+);([^;]+);([^;]+);([^;]+)";
+//char *regexString = "([^;]+);([^;]+);([^;]+);([^;]+)"; // startAfterMS
+  char *regexString = "([^;]+);([^;]+);([^;]+)";
   regex_t regexCompiled;
-  size_t maxGroups = 5;
+//size_t maxGroups = 5; // startAfterMS
+  size_t maxGroups = 4;
   char  *end;
   float  num;
   unsigned int g = 0;
@@ -223,7 +228,7 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
 
     if (regexec(&regexCompiled, line, maxGroups, groupArray, 0) == 0) {
       *alias             = '\0';
-      startAfterMS  = 0;
+//    startAfterMS  = 0;
       maxDurationMS = 0;
       *command           = '\0';
       for (g = 0; g < maxGroups; g++) {
@@ -242,18 +247,17 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
           }
           break;
         case 2:
-          if(sscanf(sourceCopy + groupArray[g].rm_so, "%u", &startAfterMS) != 1) {
-            fprintf(stderr, "Can't read startAfterMS in line [%s] on descriptor %s\n", line, filename);
-            exit(1);
-          }
-          break;
-        case 3:
+//        if(sscanf(sourceCopy + groupArray[g].rm_so, "%u", &startAfterMS) != 1) {
+//          fprintf(stderr, "Can't read startAfterMS in line [%s] on descriptor %s\n", line, filename);
+//          exit(1);
+//        }
+//        break;
           if(sscanf(sourceCopy + groupArray[g].rm_so, "%u", &maxDurationMS) != 1) {
             fprintf(stderr, "Can't read maxDurationMS in line [%s] on descriptor %s\n", line, filename);
             exit(1);
           }
           break;
-        case 4:
+        case 3:
           strcpy(command, sourceCopy + groupArray[g].rm_so);
           if(*command == '\0') {
             fprintf(stderr, "Can't parse command in line [%s] on descriptor %s\n", line, filename);
@@ -265,7 +269,7 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
       b                = jobs + id;
       b->id            = id;
       strcpy(b->alias, alias);
-      b->startAfterMS  = startAfterMS;
+//    b->startAfterMS  = startAfterMS;
       b->maxDurationMS = maxDurationMS;
       strcpy(b->command, command);
       b->state         = UNSTARTED;
@@ -304,20 +308,18 @@ void *execStartupRoutine (void *arg) {
       sprintf(MSGBUFF, "Thread for [%s]: child process for [%s] has pid [%u]", job->alias, job->command, getpid());
       tPrint(MSGBUFF);
     }
-    if(job->startAfterMS > 0) {
-      // somehow calling tPrint on child aborts the execution sometimes when it calls gmtime_r or ctime
-      if(job->verbose) {
-        sprintf(MSGBUFF, "Thread for [%s]: child process sleeps %dms", job->alias, job->startAfterMS);
-        tPrint(MSGBUFF);
-      }
-      usleep(1000 * job->startAfterMS);
-      if(job->verbose) {
-        sprintf(MSGBUFF, "Thread for [%s]: child process awakes", job->alias);
-        tPrint(MSGBUFF);
-      }
-    }
+//  if(job->startAfterMS > 0) {
+//    if(job->verbose) {
+//      sprintf(MSGBUFF, "Thread for [%s]: child process sleeps %dms", job->alias, job->startAfterMS);
+//      tPrint(MSGBUFF);
+//    }
+//    usleep(1000 * job->startAfterMS);
+//    if(job->verbose) {
+//      sprintf(MSGBUFF, "Thread for [%s]: child process awakes", job->alias);
+//      tPrint(MSGBUFF);
+//    }
+//  }
 
-    // somehow calling tPrint on child aborts the execution sometimes when it calls gmtime_r or ctime
     if(job->verbose) {
       sprintf(MSGBUFF, "Thread for [%s]: child process executing [%s]", job->alias, job->command);
       tPrint(MSGBUFF);
@@ -383,13 +385,21 @@ void launchJobs(char *filename, char *envp[], int verbose) {
 
   for(int i = 0; i < numJobs; i++) {
     if(verbose > 1) {
-      sprintf(MSGBUFF, "Creating the launcher thread for the job [%s]", (*((bgjob *)(jobs+i))).alias);
+      sprintf(MSGBUFF, "Creating the launcher thread for the job [%s]", jobs[i].alias);
       tPrint(MSGBUFF);
     }
-
     if(pthread_create(threads+i, NULL, execStartupRoutine, (void *) &(jobs[i]))) {
-      fprintf(stderr, "Can't create the thread\n");
+      fprintf(stderr, "Can't create the thread of [%s]\n", jobs[i].alias);
       exit(1);
+    }
+    // Let's create the childs one by one
+    if(pthread_join(threads[i], NULL)) {
+      fprintf(stderr, "Can't join to the thread of [%s]\n", jobs[i].alias);
+      exit(1);
+    }
+    if(verbose > 1) {
+      sprintf(MSGBUFF, "The launcher thread for the job [%s] has ended", jobs[i].alias);
+      tPrint(MSGBUFF);
     }
   }
 

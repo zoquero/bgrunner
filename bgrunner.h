@@ -31,14 +31,6 @@ typedef struct {
   int            verbose;
 } bgjob;
 
-/*
-typedef struct {
-  bgjob *job;
-  char  **envp;
-  int  verbose;
-} exec_args;
-*/
-
 /* Funcs */
 
 void printJob(bgjob *);
