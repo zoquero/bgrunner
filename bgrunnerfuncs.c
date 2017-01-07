@@ -286,6 +286,7 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
 
 
 void *execStartupRoutine (void *arg) {
+  pid_t pid;
   char MSGBUFF[BUFSIZE];
   bgjob *job = (bgjob *) arg;
 
@@ -293,7 +294,10 @@ void *execStartupRoutine (void *arg) {
     sprintf(MSGBUFF, "Thread for [%s]: forking from pid %d and thread id %lu to exec the job", job->alias, getpid(), pthread_self());
     tPrint(MSGBUFF);
   }
-  pid_t pid;
+
+  // we must flush or the buffered output will be printed twice
+  fflush(stdout);
+  fflush(stderr);
   pid = fork();
 
   if (pid < 0) {
@@ -325,6 +329,10 @@ void *execStartupRoutine (void *arg) {
       tPrint(MSGBUFF);
     }
 
+    // we must flush before duplicating file descriptors
+    // or the pending buffered writes will be written to the new output files
+    fflush(stdout);
+    fflush(stderr);
 
     char childFileOut[PATH_MAX];
     char childFileErr[PATH_MAX];
@@ -332,7 +340,7 @@ void *execStartupRoutine (void *arg) {
     sprintf(childFileErr, "/tmp/bgrunner.job.%s.stderr", job->alias);
 
     int outFd = open(childFileOut, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-    int errFd = open(childFileOut, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    int errFd = open(childFileErr, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if(outFd < 0 || errFd < 0) {
       fprintf(stderr, "Error opening stdout or stderr files on the child process of [%s]\n", job->alias);
       exit(1);
@@ -349,8 +357,8 @@ void *execStartupRoutine (void *arg) {
 
     execl(job->command, job->command, (char *) NULL);
 
-    /* execve() just returns on error */
-    fprintf(stderr, "Error calling execve from the child process of [%s]\n", job->alias);
+    /* exec() just returns on error */
+    fprintf(stderr, "Error calling execl from the child process of [%s]\n", job->alias);
     exit(1);
   }
   else {
@@ -362,7 +370,10 @@ void *execStartupRoutine (void *arg) {
     job->state       = STARTED;
     job->startupTime = now;
 
-    if(job->verbose) printf("Thread for [%s]: parent after exec\n", job->alias);
+    if(job->verbose) {
+      sprintf(MSGBUFF, "Thread for [%s]: parent after exec", job->alias);
+      tPrint(MSGBUFF);
+    }
   }
 }
 
@@ -384,6 +395,9 @@ void launchJobs(char *filename, char *envp[], int verbose) {
   }
 
   for(int i = 0; i < numJobs; i++) {
+
+/*
+    // using threads
     if(verbose > 1) {
       sprintf(MSGBUFF, "Creating the launcher thread for the job [%s]", jobs[i].alias);
       tPrint(MSGBUFF);
@@ -401,6 +415,18 @@ void launchJobs(char *filename, char *envp[], int verbose) {
       sprintf(MSGBUFF, "The launcher thread for the job [%s] has ended", jobs[i].alias);
       tPrint(MSGBUFF);
     }
+*/
+
+    if(verbose > 1) {
+      sprintf(MSGBUFF, "Let's launch the job [%s] from pid %u", jobs[i].alias, getpid());
+      tPrint(MSGBUFF);
+    }
+    execStartupRoutine(&(jobs[i]));
+    if(verbose > 1) {
+      sprintf(MSGBUFF, "The job [%s] has been launched from pid %u", jobs[i].alias, getpid());
+      tPrint(MSGBUFF);
+    }
+
   }
 
   waitForJobs(jobs, numJobs, verbose);
