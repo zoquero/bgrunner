@@ -282,7 +282,6 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
 
 
 void *execStartupRoutine (void *arg) {
-printf("DEBUG: execStartupRoutine :\n");
   char MSGBUFF[BUFSIZE];
   bgjob *job = (bgjob *) arg;
 
