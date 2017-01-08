@@ -15,6 +15,10 @@ Basic \*NIX tools are too much basic:
 * With ampersand (`&`) you can just launch one process and you have manage it by hand (`ps` and `kill` on a loop).
 * `cron` and `at` allow you to run multiple background processes but you still have to manage them manually.
 
+# Usage
+
+`bgrunner (-v) (-d) (-o <outputfolder>) -f <jobsdescriptor>`
+
 # Build and install
 
 ## Quick guide
@@ -27,7 +31,6 @@ How to install:
 * `sudo install -o root -g root -m 0755 ./bgrunner /usr/bin/`
 * `gzip ./doc/bgrunner.1.gz`
 * `sudo install -o root -g root -m 0644 ./doc/bgrunner.1.gz /usr/share/man/man1/`
-
 
 ## Dependencies
 
