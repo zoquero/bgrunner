@@ -15,6 +15,10 @@
 #define MAX_JOBS 1024
 #define MAX_ALIAS_LEN   50   // Max length of the alias
 
+#define STATE_PREFORK     0
+#define STATE_FORKED      1
+#define STATE_EXEC_ERROR  2
+
 enum bgjstate {UNSTARTED, STARTED, KILLED, FINISHED}; 
 
 /** Background job structure */
