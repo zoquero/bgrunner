@@ -21,7 +21,7 @@
 void usage() {
   printf("Background jobs runner\n");
   printf("Usage:\n");
-  printf("bgrunner (-v) (-d) (-o outputfolder) -f <jobsdescriptor>\n");
+  printf("bgrunner (-v) (-d) (-o <outputfolder>) -f <jobsdescriptor>\n");
   exit(1);
 }
 
