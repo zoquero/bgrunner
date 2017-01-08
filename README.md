@@ -44,7 +44,7 @@ How to build:
 
 How to install:
 * `sudo install -o root -g root -m 0755 ./bgrunner /usr/bin/`
-* `gzip ./doc/bgrunner.1.gz`
+* `gzip ./doc/bgrunner.1`
 * `sudo install -o root -g root -m 0644 ./doc/bgrunner.1.gz /usr/share/man/man1/`
 
 ## Dependencies
