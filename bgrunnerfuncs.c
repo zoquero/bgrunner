@@ -71,6 +71,7 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
   char MSGBUFF[BUFSIZE];
   char wExitStatus;
   char outputFilename[PATH_MAX];
+  short killed[numJobs];
 
   sprintf(outputFilename, "%s/%s", outputFolder, RESULTS_BASENAME);
 
@@ -87,7 +88,7 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
     fflush(stdout);
   }
   else {
-    fprintf(resultsFile, "job_alias;job_command;wait_ret_code;execResult(1==ok,2==error);durationMS(sleepTime=%dus)\n",sleepTime);
+    fprintf(resultsFile, "job_alias;job_command;wait_ret_code;killedByTimeout(0==false,1==true);execResult(1==ok,2==error);durationMS(sleepTime=%dus)\n",sleepTime);
   }
 
   if(verbose) {
@@ -120,7 +121,12 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
             }
           }
           else {
-            sprintf(MSGBUFF, "Job [%s]: didn't finished normally (WIFEXITED returns false), maybe was killed", jobs[i].alias);
+            if(killed[i] == 1) {
+              sprintf(MSGBUFF, "Job [%s]: has been killed by timeout", jobs[i].alias);
+            }
+            else {
+              sprintf(MSGBUFF, "Job [%s]: didn't finished normally (WIFEXITED returns false), maybe was killed by someone else", jobs[i].alias);
+            }
             tPrint(MSGBUFF);
             fflush(stdout);
           }
@@ -128,7 +134,7 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
           struct timeval now;
           double durationMS=timeval_diff(&now, &(jobs[i].startupTime)) - jobs[i].startAfterMS;
           if(resultsFile != NULL)
-            fprintf(resultsFile, "%s;%s;%d;%d;%f\n", jobs[i].alias, jobs[i].command, (int) wExitStatus, (int) shmChildStates[i], durationMS);
+            fprintf(resultsFile, "%s;%s;%d;%d;%d;%f\n", jobs[i].alias, jobs[i].command, (int) wExitStatus, killed[i], (int) shmChildStates[i], durationMS);
         }
         else if(w == -1) {
           fprintf (stderr, "Bug: job [%s] with pid [%d] has already finished\n", jobs[i].alias, jobs[i].pid);
@@ -148,6 +154,7 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
               tPrint(MSGBUFF);
               fflush(stdout);
               kill(jobs[i].pid, SIGKILL);
+              killed[i] = 1;
             }
           }
         }
