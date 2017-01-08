@@ -14,18 +14,14 @@
 #include <sys/types.h>    // pid_t , kill
 #include <unistd.h>       // pid_t , usleep
 #include <sys/wait.h>     // waitpid
-#include <pthread.h>      // pthread_create ...
 #include <sys/time.h>     // gettimeofday
+#include <time.h>         // strftime , gmtime_r, time, struct tm
 #include <signal.h>       // kill
 #include <fcntl.h>        // open
 #include <sys/mman.h>     // mmap
 
 #include "bgrunner.h"
 
-#define SLEEP_TIME 10000            // in microseconds
-#define US_TO_SHOW_ON_DEBUG 1000000 // 1 second
-#define BUFSIZE 1024
-#define RESULTS_BASENAME "bgjobs_results.csv"
 
 /* shmChildStates is for IPC, for child to tell the parent if could do exec.
  * It has nothing to do with bgjob.state.
@@ -43,7 +39,7 @@ void tPrint (char *s) {
   char       buffer[80];
   struct tm  result;
   time(&rawtime);
-  if(gmtime_r(&rawtime, &result) != NULL) {    // _r for thread safeness
+  if(gmtime_r(&rawtime, &result) != NULL) {
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%SZ", &result);
     printf("%s: %s\n", buffer, s);
   }
@@ -66,29 +62,32 @@ double timeval_diff(struct timeval *a, struct timeval *b) {
 }
 
 
-void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
+void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verbose) {
   int finishedJobs;
   pid_t w;
   int status;
-  unsigned int sleepTime = SLEEP_TIME;
+  unsigned int sleepTime = SLEEP_TIME_US;
   unsigned int z = 0;
   char MSGBUFF[BUFSIZE];
   char wExitStatus;
+  char outputFilename[PATH_MAX];
 
-  if(verbose) {
-    sprintf(MSGBUFF, "Let's open output file with results %s", RESULTS_BASENAME);
+  sprintf(outputFilename, "%s/%s", outputFolder, RESULTS_BASENAME);
+
+  if(verbose > 1) {
+    sprintf(MSGBUFF, "Let's open output file with results %s", outputFilename);
     tPrint(MSGBUFF);
     fflush(stdout);
   }
   FILE *resultsFile;
-  resultsFile=fopen(RESULTS_BASENAME , "w");
+  resultsFile=fopen(outputFilename , "w");
   if(resultsFile == NULL) {
     sprintf(MSGBUFF, "ERROR: Can't open the results file\n");
     tPrint(MSGBUFF);
     fflush(stdout);
   }
   else {
-    fprintf(resultsFile, "job_id;job_command;wait_ret_code;execResult(1==ok,2==error);durationMS(sleepTime=%dus)\n",sleepTime);
+    fprintf(resultsFile, "job_alias;job_command;wait_ret_code;execResult(1==ok,2==error);durationMS(sleepTime=%dus)\n",sleepTime);
   }
 
   if(verbose) {
@@ -107,29 +106,23 @@ void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
           if(WIFEXITED(status)) {
             wExitStatus = WEXITSTATUS(status);
             if(verbose) {
-              sprintf(MSGBUFF, "Job [%s] now is not runninng. Return code [%d]", jobs[i].alias, (int) wExitStatus);
-              tPrint(MSGBUFF);
-    fflush(stdout);
+              if(shmChildStates[i] == STATE_EXEC_ERROR) {
+                sprintf(MSGBUFF,
+                  "Job [%s]: couldn't be executed (execl failed)", jobs[i].alias);
+                tPrint(MSGBUFF);
+                fflush(stdout);
+              }
+              else {
+                sprintf(MSGBUFF, "Job [%s]: finished with return code [%d]", jobs[i].alias, (int) wExitStatus);
+                tPrint(MSGBUFF);
+                fflush(stdout);
+              }
             }
           }
           else {
-            sprintf(MSGBUFF, "Job [%s] doesn't finished normally (WIFEXITED returns false), maybe was killed", jobs[i].alias);
+            sprintf(MSGBUFF, "Job [%s]: didn't finished normally (WIFEXITED returns false), maybe was killed", jobs[i].alias);
             tPrint(MSGBUFF);
-    fflush(stdout);
-          }
-          switch(shmChildStates[i]) {
-            case STATE_EXEC_ERROR:
-              if(verbose) {
-                sprintf(MSGBUFF, "Job [%s]: execl failed", jobs[i].alias);
-                tPrint(MSGBUFF);
-    fflush(stdout);
-              }
-            default:
-              if(verbose) {
-                sprintf(MSGBUFF, "Job [%s]: execl was successfull", jobs[i].alias);
-                tPrint(MSGBUFF);
-    fflush(stdout);
-              }
+            fflush(stdout);
           }
 
           struct timeval now;
@@ -151,9 +144,9 @@ void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
             struct timeval now;
             gettimeofday(&now, NULL);
             if(timeval_diff(&now, &(jobs[i].startupTime)) > jobs[i].maxDurationMS + jobs[i].startAfterMS ) {
-              sprintf(MSGBUFF, "Job [%s] has been running more than %u ms. Let's kill it", jobs[i].alias, jobs[i].maxDurationMS);
+              sprintf(MSGBUFF, "Job [%s]: has been running more than %u ms. Let's kill it", jobs[i].alias, jobs[i].maxDurationMS);
               tPrint(MSGBUFF);
-    fflush(stdout);
+              fflush(stdout);
               kill(jobs[i].pid, SIGKILL);
             }
           }
@@ -165,7 +158,7 @@ void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
     }
     if(finishedJobs == numJobs) {
       if(verbose) {
-        sprintf(MSGBUFF, "All jobs finished");
+        sprintf(MSGBUFF, "All jobs finished. Results saved at [%s]", outputFilename);
         tPrint(MSGBUFF);
         fflush(stdout);
       }
@@ -177,7 +170,7 @@ void waitForJobs(bgjob *jobs, unsigned int numJobs, int verbose) {
         z = 0;
         sprintf(MSGBUFF, "%d finished jobs", finishedJobs);
         tPrint(MSGBUFF);
-fflush(stdout);
+        fflush(stdout);
       }
     usleep(sleepTime);
     z++;
@@ -186,7 +179,7 @@ fflush(stdout);
   if(fclose(resultsFile) != 0) {
     sprintf(MSGBUFF, "ERROR: Can't close the CSV output file with results");
     tPrint(MSGBUFF);
-fflush(stdout);
+    fflush(stdout);
   }
 }
 
@@ -347,15 +340,16 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
 }
 
 
-void *execStartupRoutine (void *arg, char *shmChildState) {
+void *execStartupRoutine (void *arg, char *shmChildState, char *outputFolder) {
   pid_t pid;
   char MSGBUFF[BUFSIZE];
   bgjob *job = (bgjob *) arg;
 
   *shmChildState = STATE_PREFORK;
 
-  if(job->verbose) {
-    sprintf(MSGBUFF, "Thread for [%s]: forking from pid %d and thread id %lu to exec the job", job->alias, getpid(), pthread_self());
+  if(job->verbose > 1) {
+    sprintf(MSGBUFF,
+      "Job [%s]: forking from pid [%d] to exec the job", job->alias, getpid());
     tPrint(MSGBUFF);
   }
 
@@ -373,24 +367,24 @@ void *execStartupRoutine (void *arg, char *shmChildState) {
 
     /* child */
     *shmChildState = STATE_FORKED;
-    if(job->verbose) {
-      sprintf(MSGBUFF, "Thread for [%s]: child process for [%s] has pid [%u]", job->alias, job->command, getpid());
+    if(job->verbose > 1) {
+      sprintf(MSGBUFF, "Job [%s]: child process for [%s] has pid [%u]", job->alias, job->command, getpid());
       tPrint(MSGBUFF);
     }
     if(job->startAfterMS > 0) {
-      if(job->verbose) {
-        sprintf(MSGBUFF, "Thread for [%s]: child process sleeps %dms", job->alias, job->startAfterMS);
+      if(job->verbose > 1) {
+        sprintf(MSGBUFF, "Job [%s]: child process sleeps %dms", job->alias, job->startAfterMS);
         tPrint(MSGBUFF);
       }
       usleep(1000 * job->startAfterMS);
-      if(job->verbose) {
-        sprintf(MSGBUFF, "Thread for [%s]: child process awakes", job->alias);
+      if(job->verbose > 1) {
+        sprintf(MSGBUFF, "Job [%s]: child process awakes", job->alias);
         tPrint(MSGBUFF);
       }
     }
 
     if(job->verbose) {
-      sprintf(MSGBUFF, "Thread for [%s]: child process executing [%s]", job->alias, job->command);
+      sprintf(MSGBUFF, "Job [%s]: child process executing [%s]", job->alias, job->command);
       tPrint(MSGBUFF);
     }
 
@@ -401,8 +395,8 @@ void *execStartupRoutine (void *arg, char *shmChildState) {
 
     char childFileOut[PATH_MAX];
     char childFileErr[PATH_MAX];
-    sprintf(childFileOut, "/tmp/bgrunner.job.%s.stdout", job->alias);
-    sprintf(childFileErr, "/tmp/bgrunner.job.%s.stderr", job->alias);
+    sprintf(childFileOut, "%s/bgrunner.%s.stdout", outputFolder, job->alias);
+    sprintf(childFileErr, "%s/bgrunner.%s.stderr", outputFolder, job->alias);
 
     int outFd = open(childFileOut, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     int errFd = open(childFileErr, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
@@ -424,7 +418,9 @@ void *execStartupRoutine (void *arg, char *shmChildState) {
 
     /* exec() just returns on error */
     *shmChildState = STATE_EXEC_ERROR;
-    fprintf(stderr, "Error calling execl from the child process of [%s]\n", job->alias);
+    fprintf(stderr,
+      "Error calling execl from the child of job [%s] and executable [%s]\n",
+      job->alias, job->command);
     exit(1);
   }
   else {
@@ -436,22 +432,20 @@ void *execStartupRoutine (void *arg, char *shmChildState) {
     job->state       = STARTED;
     job->startupTime = now;
 
-    if(job->verbose) {
-      sprintf(MSGBUFF, "Thread for [%s]: parent after exec", job->alias);
+    if(job->verbose > 1) {
+      sprintf(MSGBUFF, "Job [%s]: parent after exec", job->alias);
       tPrint(MSGBUFF);
     }
   }
 }
 
 
-void launchJobs(char *filename, char *envp[], int verbose) {
+void launchJobs(char *filename, char *outputFolder, char *envp[], int verbose) {
   unsigned int numJobs;
   bgjob* jobs;
-  pthread_t *threads;
   char MSGBUFF[BUFSIZE];
 
   jobs = loadJobs(filename, &numJobs, envp, verbose);
-  threads = (pthread_t *) malloc(numJobs * sizeof(pthread_t));
 
   shmChildStates = mmap(NULL, numJobs * sizeof(char), PROT_READ | PROT_WRITE, 
                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -461,36 +455,18 @@ void launchJobs(char *filename, char *envp[], int verbose) {
     for(int i = 0; i < numJobs; i++) {
       printf("* "); printJobShort(jobs+i);
     }
+    printf("Output files and reports will be created at [%s] folder\n",
+      outputFolder);
+    printf("Let's begin:\n\n");
   }
 
   for(int i = 0; i < numJobs; i++) {
 
-/*
-    // using threads
     if(verbose > 1) {
-      sprintf(MSGBUFF, "Creating the launcher thread for the job [%s]", jobs[i].alias);
+      sprintf(MSGBUFF, "Let's work with the job [%s] from pid %u", jobs[i].alias, getpid());
       tPrint(MSGBUFF);
     }
-    if(pthread_create(threads+i, NULL, execStartupRoutine, (void *) &(jobs[i]))) {
-      fprintf(stderr, "Can't create the thread of [%s]\n", jobs[i].alias);
-      exit(1);
-    }
-    // Let's create the childs one by one
-    if(pthread_join(threads[i], NULL)) {
-      fprintf(stderr, "Can't join to the thread of [%s]\n", jobs[i].alias);
-      exit(1);
-    }
-    if(verbose > 1) {
-      sprintf(MSGBUFF, "The launcher thread for the job [%s] has ended", jobs[i].alias);
-      tPrint(MSGBUFF);
-    }
-*/
-
-    if(verbose > 1) {
-      sprintf(MSGBUFF, "Let's launch the job [%s] from pid %u", jobs[i].alias, getpid());
-      tPrint(MSGBUFF);
-    }
-    execStartupRoutine(&(jobs[i]), &(shmChildStates[i]));
+    execStartupRoutine(&(jobs[i]), &(shmChildStates[i]), outputFolder);
     if(verbose > 1) {
       sprintf(MSGBUFF, "The job [%s] has been launched from pid %u", jobs[i].alias, getpid());
       tPrint(MSGBUFF);
@@ -498,9 +474,8 @@ void launchJobs(char *filename, char *envp[], int verbose) {
 
   }
 
-  waitForJobs(jobs, numJobs, verbose);
+  waitForJobs(jobs, outputFolder, numJobs, verbose);
   munmap(shmChildStates, numJobs * sizeof(char));
-  free(threads);
   free(jobs);
 }
 

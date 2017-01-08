@@ -19,19 +19,20 @@
 #include "bgrunner.h"
 
 void usage() {
-  printf("Background runner\n");
+  printf("Background jobs runner\n");
   printf("Usage:\n");
-  printf("bgrunner (-v) (-d) -f <jobsdescriptor>\n");
+  printf("bgrunner (-v) (-d) (-o outputfolder) -f <jobsdescriptor>\n");
   exit(1);
 }
 
 
-void getOpts(int argc, char **argv, int *verbose, char *filename) {
+void getOpts(int argc, char **argv, int *verbose, char *filename, char *outputFolder) {
   int c;
   extern char *optarg;
   extern int optind, opterr, optopt;
   opterr = 0;
   short v = 0, d = 0;
+  strcpy(outputFolder, DEFAULT_FOLDER);
 
   if(argc == 2 && strcmp(argv[1], "-h") == 0) {
     usage();
@@ -43,7 +44,7 @@ void getOpts(int argc, char **argv, int *verbose, char *filename) {
 
   char scanfFormat[20];
   sprintf(scanfFormat, "%%%ds", PATH_MAX - 1);
-  while ((c = getopt (argc, argv, "vdf:")) != -1) {
+  while ((c = getopt (argc, argv, "vdo:f:")) != -1) {
     switch (c) {
       case 'h':
         usage();
@@ -53,6 +54,12 @@ void getOpts(int argc, char **argv, int *verbose, char *filename) {
         break;
       case 'd':
         d = 1;
+        break;
+      case 'o':
+        if(sscanf(optarg, scanfFormat, outputFolder) != 1) {
+          fprintf (stderr, "Option -%c requires an argument\n", c);
+          usage();
+        }
         break;
       case 'f':
         if(sscanf(optarg, scanfFormat, filename) != 1) {
@@ -97,9 +104,10 @@ int main (int argc, char *argv[], char *envp[]) {
    */
   int  verbose = 0;
   char filename[PATH_MAX];
+  char outputFolder[PATH_MAX];
 
-  getOpts(argc, argv, &verbose, filename);
-  launchJobs(filename, envp, verbose);
+  getOpts(argc, argv, &verbose, filename, outputFolder);
+  launchJobs(filename, outputFolder, envp, verbose);
 
   exit(0);
 }
