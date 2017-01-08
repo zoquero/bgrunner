@@ -1,8 +1,8 @@
 # Summary
 
-Tool written in C to launch and keep track of background processes
+Lightweight tool written in C to launch and keep track of background processes
 
-Angel Galindo ( zoquero@gmail.com ), January of 2017
+Angel Galindo Muñoz ( zoquero@gmail.com ), January of 2017
 
 # Features
 
@@ -18,6 +18,21 @@ Basic \*NIX tools are too much basic:
 # Usage
 
 `bgrunner (-v) (-d) (-o <outputfolder>) -f <jobsdescriptor>`
+
+# Output
+
+It generates:
+* output messages depending on the chosen verbosity (-d and -v)
+* a file for stdout (`bgrunner.$job_alias.stdout`) and other for stderr (`bgrunner.$job_alias.stderr`) for each job
+* a CSV file `bgrunner.results.csv` with the results of the executions
+
+The CSV results file contains these fields for each job:
+* job alias (got from the job descriptor)
+* job command (got from the job descriptor)
+* return code got from waitpid after the process execution
+* if the process was killed by the timeout specified in the descriptor (0==false, 1==true)
+* if execl worked (1==ok, 2==error). Typical errors: missing execution permission.
+* process duration in miliseconds. Keep in mind that it's polled each 10 miliseconds, you can modify this sample interval changing US_TO_SHOW_ON_DEBUG on bgrunner.h and rebuilding.
 
 # Build and install
 
