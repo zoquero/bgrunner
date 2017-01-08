@@ -47,6 +47,9 @@ How to install:
 * `gzip ./doc/bgrunner.1`
 * `sudo install -o root -g root -m 0644 ./doc/bgrunner.1.gz /usr/share/man/man1/`
 
+## Open Build Service
+If you prefer you can install my already built packages available in [Open Build Service](https://build.opensuse.org/package/show/home:zoquero:bgrunner/bgrunner).
+
 ## Dependencies
 
 None
