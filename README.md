@@ -1,12 +1,12 @@
 # Summary
 
-Tool written in C to launch background processes
+Tool written in C to launch and keep track of background processes
 
-Angel Galindo ( zoquero@gmail.com ), december of 2016
+Angel Galindo ( zoquero@gmail.com ), January of 2017
 
 # Features
 
-It allows you to launch multiple processes in background, keep track of them and wait for it's completion. You can set an offset of time before starting each job and you can appply a timeout for each.
+It allows to launch multiple processes in background, keep track of them, wait for it's completion applying timeouts and get their stdout, stderr, return code and duration.
 
 # Motivation
 
@@ -25,6 +25,9 @@ How to build:
 
 How to install:
 * `sudo install -o root -g root -m 0755 ./bgrunner /usr/bin/`
+* `gzip ./doc/bgrunner.1.gz`
+* `sudo install -o root -g root -m 0644 ./doc/bgrunner.1.gz /usr/share/man/man1/`
+
 
 ## Dependencies
 

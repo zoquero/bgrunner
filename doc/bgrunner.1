@@ -1,0 +1,59 @@
+.\" Manpage for bgrunner.
+.\" Contact zoquero@gmail.com to correct errors or typos.
+.TH bgrunner 1 "08 Jan 2017" "1.0" "bgrunner man page"
+.SH NAME
+bgrunner \- Background jobs runner
+.SH SYNOPSIS
+Background jobs runner
+
+Usage:
+
+bgrunner (-v) (-d) (-o outputfolder) -f <jobsdescriptor>
+
+* -v == verbose
+
+* -d == debug (more verbosity)
+
+* -o => output folder with stdout, stderr, duration and job result code for each job. Defaults to /tmp
+
+* -f => job descriptor, a CSV file like this:
+
+
+
+#alias;startAfterMS;maxDurationMS;command
+
+one;0;0;/tmp/myscript.sh
+
+two;15000;10000;/usr/local/bin/myexecutable
+
+three;5000;30000;/usr/local/bin/otherexecutable
+
+
+
+fields for the descriptor:
+
+* 1st: alias for the job
+
+* 2nd: miliseconds to wait before executing the job
+
+* 3rd: max duration for the job in miliseconds. After that it will be killed sending SIGKILL.
+
+* 4th: path for the command to be executed. Parameters aren't allowed. As a workaround you can wrap them on a script.
+
+
+.SH DESCRIPTION
+
+It allows to launch multiple processes in background, keep track of them, wait for it's completion applying timeouts and get their stdout, stderr, return code and duration.
+
+
+.SH SOURCE
+It can be found at GitHub: https://github.com/zoquero/bgrunner/
+
+.SH SEE ALSO
+crontab(1), cron(8), at(1), atd(8) 
+
+.SH BUGS
+No known bugs. You can report them at https://github.com/zoquero/bgrunner/issues
+
+.SH AUTHOR
+Angel Galindo Munoz (zoquero@gmail.com)
