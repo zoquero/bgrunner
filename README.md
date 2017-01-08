@@ -19,6 +19,25 @@ Basic \*NIX tools are too much basic:
 
 `bgrunner (-v) (-d) (-o <outputfolder>) -f <jobsdescriptor>`
 
+* `-v` == verbose (optional)
+* `-d` == debug (optional, more verbosity)
+* `-o` => output folder with stdout, stderr, duration and job result code for each job. Defaults to /tmp
+* `-f` => job descriptor, a CSV file like this:
+
+`#alias;startAfterMS;maxDurationMS;command`
+
+`one;0;0;/tmp/myscript.sh`
+
+`two;15000;10000;/usr/local/bin/myexecutable`
+
+`three;5000;30000;/usr/local/bin/otherexecutable`
+
+fields for the descriptor:
+* 1st: alias for the job
+* 2nd: miliseconds to wait before executing the job
+* 3rd: max duration for the job in miliseconds. After that it will be killed sending `SIGKILL`.
+* 4th: path for the command to be executed. Parameters aren't allowed. As a workaround you can wrap them on a script.
+
 # Output
 
 It generates:
