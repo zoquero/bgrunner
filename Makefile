@@ -19,4 +19,4 @@ clean:
 install:
 	mkdir -p $(DESTDIR)
 	install -m 0755 $(EXECUTABLE) $(DESTDIR)
-	install -m 0644 doc/sbench.1.gz $(MANDIR)
+	install -m 0644 doc/bgrunner.1.gz $(MANDIR)
