@@ -1,0 +1,14 @@
+#!/bin/bash
+s=INDEX
+ss=$1
+param=$2
+szp=$(printf "%09d" $s)
+output=/tmp/bgrunner_test.$szp.out
+
+#date
+echo "$0: Will sleep for $ss seconds, got param = [$param]"
+echo "$0: Will sleep for $ss seconds, got param = [$param]" >> "$output"
+sleep $ss
+#date
+echo "$0: The script ends"
+echo "$0: The script ends" >> "$output"

@@ -28,6 +28,30 @@
  */
 static char *shmChildStates;
 
+/**
+  * Split a string into an array
+  * @param pointer to the char array to be splitted
+  * @param pointer to the pointer to the first element
+  *          of the array that should contain the results.
+  *          It must be allocated by the caller,
+  *          like for example: char *array[max_components];
+  * @param pointer to the delimitating character
+  * @param maximum number of components
+  * @return number of components or -1 if reaches the max number of components
+  *
+  */
+int split(char *string, char **splitted_string, char *delim, int max_components) {
+  int i=0;
+
+  splitted_string[i] = strtok(string, delim);
+  while(splitted_string[i]!=NULL) {
+    if(i >= max_components)
+      return -1;
+    splitted_string[++i] = strtok(NULL, delim);
+  }
+  return i;
+}
+
 
 /**
   * Print to stdout with UTC timestamp
@@ -88,11 +112,11 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
     fflush(stdout);
   }
   else {
-    fprintf(resultsFile, "job_alias;job_command;wait_ret_code;killedByTimeout(0==false,1==true);execResult(1==ok,2==error);durationMS(sleepTime=%dus)\n",sleepTime);
+    fprintf(resultsFile, "#job_alias;job_command;wait_ret_code;killedByTimeout(0==false,1==true);execResult(1==ok,2==error);durationMS(sleepTime=%dus)\n",sleepTime);
   }
 
   if(verbose) {
-    sprintf(MSGBUFF, "Let's wait for the jobs with a sleepTime of %u us", sleepTime);
+    sprintf(MSGBUFF, "Let's wait for the jobs with a sleepTime of [%u]us", sleepTime);
     tPrint(MSGBUFF);
     fflush(stdout);
   }
@@ -109,12 +133,12 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
             if(verbose) {
               if(shmChildStates[i] == STATE_EXEC_ERROR) {
                 sprintf(MSGBUFF,
-                  "Job [%s]: couldn't be executed (execl failed)", jobs[i].alias);
+                  "Job [%s]: It couldn't be executed (execve failed)", jobs[i].alias);
                 tPrint(MSGBUFF);
                 fflush(stdout);
               }
               else {
-                sprintf(MSGBUFF, "Job [%s]: finished with return code [%d]", jobs[i].alias, (int) wExitStatus);
+                sprintf(MSGBUFF, "Job [%s]: It finished with return code [%d]", jobs[i].alias, (int) wExitStatus);
                 tPrint(MSGBUFF);
                 fflush(stdout);
               }
@@ -122,10 +146,10 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
           }
           else {
             if(killed[i] == 1) {
-              sprintf(MSGBUFF, "Job [%s]: has been killed by timeout", jobs[i].alias);
+              sprintf(MSGBUFF, "Job [%s]: It has been killed by timeout", jobs[i].alias);
             }
             else {
-              sprintf(MSGBUFF, "Job [%s]: didn't finished normally (WIFEXITED returns false), maybe was killed by someone else", jobs[i].alias);
+              sprintf(MSGBUFF, "Job [%s]: It haven't finished normally (WIFEXITED returns false), maybe was killed by someone else", jobs[i].alias);
             }
             tPrint(MSGBUFF);
             fflush(stdout);
@@ -150,7 +174,7 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
             struct timeval now;
             gettimeofday(&now, NULL);
             if(timeval_diff(&now, &(jobs[i].startupTime)) > jobs[i].maxDurationMS + jobs[i].startAfterMS ) {
-              sprintf(MSGBUFF, "Job [%s]: has been running more than %u ms. Let's kill it", jobs[i].alias, jobs[i].maxDurationMS);
+              sprintf(MSGBUFF, "Job [%s]: has been running more than [%u] ms. Let's kill it", jobs[i].alias, jobs[i].maxDurationMS);
               tPrint(MSGBUFF);
               fflush(stdout);
               kill(jobs[i].pid, SIGKILL);
@@ -218,25 +242,23 @@ unsigned int countLines(char *filename) {
 
 
 void printJobShort(bgjob *b) {
-  printf("BackGround job with alias=[%s] that after %ums will run [%s] for up to %ums\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS);
-//printf("BackGround job with alias=[%s] that will run [%s] for up to %ums\n", b->alias, b->command, b->maxDurationMS);
+  printf("BackGround job with alias=[%s] that after [%u] ms will run [%s] for up to [%u] ms\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS);
 }
 
 
 void printJob(bgjob *b) {
-  printf("BackGround job with alias=[%s] that after %ums will run [%s] for up to %ums, with pid [%d] and state [%d]\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS, b->pid, b->state);
-//printf("BackGround job with alias=[%s] that will run [%s] for up to %ums, with pid [%d] and state [%d]\n", b->alias, b->command, b->maxDurationMS, b->pid, b->state);
+  printf("BackGround job with alias=[%s] that after [%u] ms will run [%s] for up to [%u] ms, with pid [%d] and state [%d]\n", b->alias, b->startAfterMS, b->command, b->maxDurationMS, b->pid, b->state);
 }
 
 void printJobFull(bgjob *b) {
-  printf("BackGround job with id=[%d], alias=[%s], startAfterMS=[%u], maxDurationMS=[%u], command=[%s], pid=[%u], state=[%d], startupTime=[?], envp=[?], verbose=[%d]\n", b->id, b->alias, b->startAfterMS, b->maxDurationMS, b->command, b->pid, b->state, /* b->startupTime, b->envp, */ b->verbose);
-//printf("BackGround job with id=[%d], alias=[%s], maxDurationMS=[%u], command=[%s], pid=[%u], state=[%d], startupTime=[?], envp=[?], verbose=[%d]\n", b->id, b->alias, b->maxDurationMS, b->command, b->pid, b->state, /* b->startupTime, b->envp, */ b->verbose);
+  printf("BackGround job with id=[%d], alias=[%s], startAfterMS=[%u] ms, maxDurationMS=[%u] ms, command=[%s] ms, pid=[%u], state=[%d], startupTime=[PENDING], envp=[PENDING], verbose=[%d]\n", b->id, b->alias, b->startAfterMS, b->maxDurationMS, b->command, b->pid, b->state, /* b->startupTime, b->envp, */ b->verbose);
 }
 
 
 
 bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose) {
-  unsigned int maxLineLength = MAX_ALIAS_LEN+PATH_MAX+50;
+  // aprox 10 characters per param , 50 for separators and miliseconds
+  unsigned int maxLineLength = MAX_ALIAS_LEN+PATH_MAX+10*MAX_ARGS+50;
   char line[maxLineLength];
   unsigned int numLines;
   unsigned int id = 0;
@@ -260,7 +282,7 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
   char scanfFormat[20];
 
   if(verbose > 1) {
-    sprintf(MSGBUFF, "Using regexp [%s] when parsing the job descriptor [%s]", regexString, filename);
+    sprintf(MSGBUFF, "Using regexp [%s] and [%d] max line length when parsing the job descriptor [%s]", regexString, maxLineLength, filename);
     tPrint(MSGBUFF);
   }
 
@@ -281,8 +303,9 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
 
   FILE* myFile = fopen(filename, "r");
 
-  sprintf(scanfFormat, "%%%ds", maxLineLength - 1);
-  while(fscanf(myFile, "%s\n", line) == 1) {
+  sprintf(scanfFormat, "%%%d[^\n]\n", maxLineLength - 1);
+//printf("scanfFormat=[%s]\n", scanfFormat);
+  while(fscanf(myFile, scanfFormat, line) == 1) {
     // headers, comments
     if(*line == '#')
       continue;
@@ -347,10 +370,12 @@ bgjob *loadJobs(char *filename, unsigned int *numJobs, char *envp[], int verbose
 }
 
 
-void *execStartupRoutine (void *arg, char *shmChildState, char *outputFolder) {
+void launchJob(void *arg, char *shmChildState, char *outputFolder) {
   pid_t pid;
   char MSGBUFF[BUFSIZE];
   bgjob *job = (bgjob *) arg;
+  char childFileOut[PATH_MAX];
+  char childFileErr[PATH_MAX];
 
   *shmChildState = STATE_PREFORK;
 
@@ -375,12 +400,16 @@ void *execStartupRoutine (void *arg, char *shmChildState, char *outputFolder) {
     /* child */
     *shmChildState = STATE_FORKED;
     if(job->verbose > 1) {
-      sprintf(MSGBUFF, "Job [%s]: child process for [%s] has pid [%u]", job->alias, job->command, getpid());
+      sprintf(MSGBUFF,
+          "Job [%s]: child process for [%s] has pid [%u]",
+          job->alias, job->command, getpid());
       tPrint(MSGBUFF);
     }
     if(job->startAfterMS > 0) {
       if(job->verbose > 1) {
-        sprintf(MSGBUFF, "Job [%s]: child process sleeps %dms", job->alias, job->startAfterMS);
+        sprintf(MSGBUFF,
+          "Job [%s]: child process sleeps [%d] ms before running the command",
+          job->alias, job->startAfterMS);
         tPrint(MSGBUFF);
       }
       usleep(1000 * job->startAfterMS);
@@ -391,42 +420,77 @@ void *execStartupRoutine (void *arg, char *shmChildState, char *outputFolder) {
     }
 
     if(job->verbose) {
-      sprintf(MSGBUFF, "Job [%s]: child process executing [%s]", job->alias, job->command);
+      sprintf(MSGBUFF,
+        "Job [%s]: child process goint to execute [%s]",
+        job->alias, job->command);
       tPrint(MSGBUFF);
     }
 
-    // we must flush before duplicating file descriptors
-    // or the pending buffered writes will be written to the new output files
+    /*
+     * We must flush before duplicating file descriptors
+     * or the pending buffered writes will be written to the new output files
+     */
     fflush(stdout);
     fflush(stderr);
-
-    char childFileOut[PATH_MAX];
-    char childFileErr[PATH_MAX];
     sprintf(childFileOut, "%s/bgrunner.%s.stdout", outputFolder, job->alias);
     sprintf(childFileErr, "%s/bgrunner.%s.stderr", outputFolder, job->alias);
 
     int outFd = open(childFileOut, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     int errFd = open(childFileErr, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if(outFd < 0 || errFd < 0) {
-      fprintf(stderr, "Error opening stdout or stderr files on the child process of [%s]\n", job->alias);
+      fprintf(stderr,
+        "Job [%s]: Error opening stdout or stderr files on the child process\n",
+        job->alias);
       exit(1);
     }
 
     if(dup2(outFd, 1) < 0 || dup2(errFd, 2) < 0) {
-      fprintf(stderr, "Error duplicating file descriptors on the child process of [%s]\n", job->alias);
+      fprintf(stderr,
+        "Job [%s]: Error duplicating file descriptors on the child process\n",
+        job->alias);
       exit(1);
     }
     if(close(outFd) < 0 || close(errFd) < 0) {
-      fprintf(stderr, "Error closing the old file descriptors after duplicating them on the child process of [%s]\n", job->alias);
+      fprintf(stderr,
+        "Job [%s]: Error closing the old file descriptors "
+        "after duplicating them on the child process\n",
+        job->alias);
       exit(1);
     }
 
-    execl(job->command, job->command, (char *) NULL);
+    // Let's brake the command into executable and arguments:
+
+    char *args[MAX_ARGS+2]; // +1 for executable , +1 for the ending zero
+    int numArgs = split(job->command, args, " ", MAX_ARGS + 1); // +1 for exec
+    args[numArgs] = '\0'; // zero ended array of char*
+    if(numArgs == -1) {
+      *shmChildState = STATE_EXEC_ERROR;
+      fprintf(stderr,
+        "Job [%s]: Error parsing arguments of the command [%s]. "
+        "Max number of arguments = %d\n",
+        job->alias, job->command, MAX_ARGS);
+      exit(1);
+    }
+
+    if(job->verbose > 1) {
+      sprintf(MSGBUFF,
+        "Job [%s]: Let's show the arguments that will be sent to the command:",
+        job->alias);
+      tPrint(MSGBUFF);
+      for(int z=0; z<numArgs; z++) {
+        sprintf(MSGBUFF,
+          "Job [%s]: arg[%d]=[%s]", job->alias, z, args[z]);
+        tPrint(MSGBUFF);
+      }
+    }
+
+//  execl(job->command, job->command, (char *) NULL);
+    execve(args[0], args, job->envp);
 
     /* exec() just returns on error */
     *shmChildState = STATE_EXEC_ERROR;
     fprintf(stderr,
-      "Error calling execl from the child of job [%s] and executable [%s]\n",
+      "Job [%s]: Error calling execve from the child, command [%s]\n",
       job->alias, job->command);
     exit(1);
   }
@@ -462,7 +526,8 @@ void launchJobs(char *filename, char *outputFolder, char *envp[], int verbose) {
     for(int i = 0; i < numJobs; i++) {
       printf("* "); printJobShort(jobs+i);
     }
-    printf("Output files and reports will be created at [%s] folder\n",
+    printf("Output files and reports will be created at [%s] folder,\n"
+           "please, take a look at those files for troubleshooting.\n",
       outputFolder);
     printf("Let's begin:\n\n");
   }
@@ -470,12 +535,12 @@ void launchJobs(char *filename, char *outputFolder, char *envp[], int verbose) {
   for(int i = 0; i < numJobs; i++) {
 
     if(verbose > 1) {
-      sprintf(MSGBUFF, "Let's work with the job [%s] from pid %u", jobs[i].alias, getpid());
+      sprintf(MSGBUFF, "Let's work with the job [%s] from pid [%u]", jobs[i].alias, getpid());
       tPrint(MSGBUFF);
     }
-    execStartupRoutine(&(jobs[i]), &(shmChildStates[i]), outputFolder);
+    launchJob(&(jobs[i]), &(shmChildStates[i]), outputFolder);
     if(verbose > 1) {
-      sprintf(MSGBUFF, "The job [%s] has been launched from pid %u", jobs[i].alias, getpid());
+      sprintf(MSGBUFF, "The job [%s] has been launched from pid [%u]", jobs[i].alias, getpid());
       tPrint(MSGBUFF);
     }
 
