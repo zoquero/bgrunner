@@ -22,11 +22,11 @@ bgrunner (-v) (-d) (-o outputfolder) -f <jobsdescriptor>
 
 #alias;startAfterMS;maxDurationMS;command
 
-one;0;0;/tmp/myscript.sh
+one;0;0;/tmp/myscript.sh param1 param2
 
-two;15000;10000;/usr/local/bin/myexecutable
+two;15000;10000;/usr/local/bin/myexecutable param
 
-three;5000;30000;/usr/local/bin/otherexecutable
+three;5000;30000;/usr/local/bin/otherexecutable param
 
 
 
@@ -38,7 +38,7 @@ fields for the descriptor:
 
 * 3rd: max duration for the job in miliseconds. After that it will be killed sending SIGKILL.
 
-* 4th: path for the command to be executed. Parameters aren't allowed. As a workaround you can wrap them on a script.
+* 4th: path for the command to be executed followed by params. Blank spaces aren't allowed. As a workaround you can wrap them on a script.
 
 
 .SH OUTPUT

@@ -107,6 +107,20 @@ int main (int argc, char *argv[], char *envp[]) {
   char outputFolder[PATH_MAX];
 
   getOpts(argc, argv, &verbose, filename, outputFolder);
+
+  if(verbose > 1)
+    printf("Parameters set on build time:\n"
+           "MAX_JOBS=[%d]\n"
+           "BUFSIZE=[%d]\n"
+           "MAX_ARGS=[%d]\n"
+           "MAX_ALIAS_LEN=[%d]\n"
+           "DEFAULT_FOLDER=[%s]\n"
+           "SLEEP_TIME_US=[%d]\n"
+           "US_TO_SHOW_ON_DEBUG=[%d]\n"
+           "RESULTS_BASENAME=[%s]\n", 
+           MAX_JOBS, BUFSIZE, MAX_ARGS, MAX_ALIAS_LEN, DEFAULT_FOLDER, 
+           SLEEP_TIME_US, US_TO_SHOW_ON_DEBUG, RESULTS_BASENAME);
+
   launchJobs(filename, outputFolder, envp, verbose);
 
   exit(0);
