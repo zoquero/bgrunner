@@ -10,11 +10,11 @@ Usage:
 
 bgrunner (-v) (-d) (-o outputfolder) -f <jobsdescriptor>
 
-* -v == verbose
+* -v == (optional) verbose
 
-* -d == debug (more verbosity)
+* -d == (optional) debug (more verbosity)
 
-* -o => output folder with stdout, stderr, duration and job result code for each job. Defaults to /tmp
+* -o => (optional) output folder with stdout, stderr, duration and job result code for each job. Defaults to /tmp
 
 * -f => job descriptor, a CSV file like this:
 
@@ -22,24 +22,23 @@ bgrunner (-v) (-d) (-o outputfolder) -f <jobsdescriptor>
 
 #alias;startAfterMS;maxDurationMS;command
 
-one;0;0;/tmp/myscript.sh param1 param2
+one;0;0;/tmp/myscript.sh arg1 arg2
 
-two;15000;10000;/usr/local/bin/myexecutable param
+two;15000;10000;/usr/local/bin/mycommand myarg
 
-three;5000;30000;/usr/local/bin/otherexecutable param
+three;5000;30000;/usr/local/bin/othercommand otherarg
 
 
 
 fields for the descriptor:
 
-* 1st: alias for the job
+* 1st: alias for the job. It will be used to refer to this job on logs
 
-* 2nd: miliseconds to wait before executing the job
+* 2nd: time to wait before executing the job in miliseconds
 
-* 3rd: max duration for the job in miliseconds. After that it will be killed sending SIGKILL.
+* 3rd: max duration for the job in miliseconds. After that it will be killed sending SIGKILL. The launched jobs are sampled with a wait time specified on build-time (SLEEP_TIME_US on 'bgrunner.h'), by default it's 1 milisecond.
 
-* 4th: path for the command to be executed followed by params. Blank spaces aren't allowed. As a workaround you can wrap them on a script.
-
+* 4th: command to be executed with its arguments. White spaces aren't allowed on executables or args, just are allowed to split the executable and the arguments. As a workaround you can wrap it on a script and set the script as the command for the job.
 
 .SH OUTPUT
 
@@ -47,9 +46,9 @@ It generates:
 
 * output messages depending on the chosen verbosity (-d and -v)
 
-* a file for stdout (`bgrunner.$job_alias.stdout`) and other for stderr (`bgrunner.$job_alias.stderr`) for each job
+* a file for stdout (bgrunner.$job_alias.stdout) and other for stderr (bgrunner.$job_alias.stderr) for each job
 
-* a CSV file `bgrunner.results.csv` with the results of the executions
+* a CSV file 'bgrunner.results.csv' with the results of the executions
 
 
 
@@ -59,13 +58,13 @@ The CSV results file contains these fields for each job:
 
 * job command (got from the job descriptor)
 
-* return code got from waitpid after the process execution
+* return code got from waitpid after the process execution (it hasn't sense if it was killed by timeout or excecve hasn't worked)
 
-* if the process was killed by the timeout specified in the descriptor (0==false, 1==true)
+* if the process was killed by the timeout specified in the descriptor (0==false, 1==true) (it hasn't sense if it was killed by timeout)
 
-* if execl worked (1==ok, 2==error). Typical errors: missing execution permission.
+* if execve worked (1==ok, 2==error). Typical errors: missing execution permission.
 
-* process duration in miliseconds. Keep in mind that it's polled each 10 miliseconds, you can modify this sample interval changing US_TO_SHOW_ON_DEBUG on bgrunner.h and rebuilding.
+* process duration in miliseconds. Remember that it's polled periodically with a wait time specified on build-time (SLEEP_TIME_US on 'bgrunner.h') that by default is 1 milisecond.
 
 
 .SH DESCRIPTION

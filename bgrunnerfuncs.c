@@ -116,7 +116,7 @@ void waitForJobs(bgjob *jobs, char *outputFolder, unsigned int numJobs, int verb
   }
 
   if(verbose) {
-    sprintf(MSGBUFF, "Let's wait for the jobs with a sleepTime of [%u]us", sleepTime);
+    sprintf(MSGBUFF, "Let's wait for the jobs with a sleepTime of [%u] us", sleepTime);
     tPrint(MSGBUFF);
     fflush(stdout);
   }

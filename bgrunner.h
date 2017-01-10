@@ -20,7 +20,7 @@
 #define STATE_FORKED        1
 #define STATE_EXEC_ERROR    2
 #define DEFAULT_FOLDER      "/tmp"
-#define SLEEP_TIME_US       10000   // in microseconds
+#define SLEEP_TIME_US       1000    // in microseconds
 #define US_TO_SHOW_ON_DEBUG 1000000 // 1 second
 #define RESULTS_BASENAME    "bgrunner.results.csv"
 
