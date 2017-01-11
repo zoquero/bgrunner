@@ -4,6 +4,8 @@ Lightweight tool written in C to launch and keep track of background processes
 
 Angel Galindo Muñoz ( zoquero@gmail.com ), January of 2017
 
+[[https://github.com/zoquero/bgrunner/blob/master/doc/bgrunner_illustration.png|alt=Illustration]]
+
 # Features
 
 It allows to launch multiple processes in background, keep track of them, wait for it's completion applying timeouts and get their stdout, stderr, return code and duration.
