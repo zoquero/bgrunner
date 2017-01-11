@@ -4,14 +4,7 @@ Lightweight tool written in C to launch and keep track of background processes
 
 Angel Galindo Muñoz ( zoquero@gmail.com ), January of 2017
 
-doesn't work:
-[[https://github.com/zoquero/bgrunner/blob/master/doc/bgrunner_illustration.png|alt=Illustration]]
-
-test1:
-[![Illustration](https://github.com/zoquero/bgrunner/blob/master/doc/bgrunner_illustration.png)]
-
-test2:
-![Illustration](https://github.com/zoquero/bgrunner/blob/master/doc/bgrunner_illustration.png)
+![Illustration](https://github.com/zoquero/bgrunner/blob/master/doc/bgrunner.illustration.png)
 
 # Features
 
